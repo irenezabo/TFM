@@ -1,0 +1,366 @@
+------INCORPORATION OF FAKE EXONS INTO GTF Thu Nov 14 01:31:12 PM CET 2024------
+
+1-Incorporated GeneID to reference file for 24210 genes.
+Output:
+	data_folder/Hs2/Hs2_extraexons.tab
+Input:
+	data_folder/Hs2/REFERENCE-ALL_ANNOT-Hs2.tab 
+	data_folder/Hs2/Hs2.Event-Gene.IDs.txt 
+
+
+2-Fake exons incorporated to the GTF.
+Script:
+	scripts_folder/A1_generate_annotations_copy.pl
+Input files:
+	data_folder/Hs2/Hs2_extraexons.tab
+	data_folder/Hs2/Hs2_annot.gtf
+	data_folder/Hs2/Hs2_gDNA.fasta
+Output files:
+	data_folder/Hs2/Hs2_annot_fake.gtf.gz
+	data_folder/Hs2/FakeTranscripts-Hs2-vB.gtf
+	data_folder/Hs2/LOG_FakeTranscripts-Hs2-vB.tab
+
+CDS in original GTF: 93095 
+CDS with fake annotations: 130437
+
+
+--------- DATA PREPARATION Thu Nov 14 01:34:43 PM CET 2024 ---------
+
+1-Generation of fasta files for CDS and protein sequences.
+Scripts:
+	scripts_folder/1-GetCDS_annot_from_GTF.pl
+	scripts_folder/translate.pl
+Input files:
+	data_folder/Hs2/Hs2_annot_fake.gtf.gz
+	data_folder/Hs2/Hs2_gDNA.fasta
+Output files:
+	data_folder/Hs2/Hs2_CDS_annot.fasta
+	data_folder/Hs2/Hs2_prot_annot.fasta
+
+
+Parsed: Exons (1,819,200); CDS (1,070,159); STOP (109,800)
+
+Proteins annotated:
+	Total: 130437 
+	Multiexon proteins: 122498
+
+
+2-Parsing CDS and protein sequences, as fasta files.
+Scripts:
+	scripts_folder/2-Parse_CDS_UTR.pl
+	scripts_folder/35-Parse_CDS_prot_annot.pl
+Input:
+	data_folder/Hs2/Hs2_annot_fake.gtf.gz
+	data_folder/Hs2/Hs2_CDS_annot.fasta
+	data_folder/Hs2/Hs2_prot_annot.fasta
+Output:
+	data_folder/Hs2/Hs2_OKex.tab
+	data_folder/Hs2/Hs2_CDS_annot_parsed.tab
+	data_folder/Hs2/Hs2_prot_annot_parsed.tab 
+
+Total number of CDS lines: 1070159
+Parsing CDS. Total exons: 1070159/1070159
+Parsing protein. Total exons: 1070159/1070159
+
+
+3-Split protein sequences.
+Protein sequences from input file are split into individual fasta files (one per protein) and stored in batches (200 folders) for Iupred2a analysis.
+Input file:
+	data_folder/Hs2/Hs2_prot_annot.fasta
+
+
+ Control log (multiexon proteins): 122498	122498	122498
+
+
+4-Protein fasta files have been collapsed by batch for Pfam analysis: all proteins in  200 fasta files (one per batch).
+
+ ------------- DATA PREPARATION FINISHED -----------
+
+
+
+
+--------- DIOSORDERED REGIONS ANALYSIS WITH IUPRED2A Thu Nov 14 01:45:35 PM CET 2024 ---------
+
+1-Disorder probability for the residues estimated with Iupred2a.
+A total of 200 batches are expected to be analyzed. An '.iupred' file obtained per protein and stored in its corresponding batch folder.
+
+
+2-Parsing of raw results
+Raw iupred results for proteins in each batch have been parsed and combined (per batch).
+Script:
+	scripts_folder/Parse_IUPRED2_rec_NoCutOff.pl
+
+
+3-Combination of Iupred2a results.
+A total of 122498 proteins have been analysed in 200 batches with iupred. Results have been parsed and collapsed into a single final file (disorder score/residue).
+Output:
+	data_folder/Hs2/Hs2-iupred_result.txt
+
+
+4-Disorder rate for exons obtained.
+Script:
+	scripts_folder/6-CalculateAndPutDis_C1AC2-v2_IZB.pl
+Output:
+	data_folder/Hs2/REFERENCE-ALL_ANNOT-Hs2-DisI-v2.tab
+
+
+The original REFERENCE file contained 720625 lines, and the output, 720572 lines.
+A total of 53 events are missing; 2 EX events.
+
+Number of events of each type:
+ 171176 HsaALTA-/
+ 132936 HsaALTD-/
+ 223502 HsaEX
+ 192958 HsaINT
+
+
+Missing exons:
+Warnings in creating REFERENCE file with disorder rate (IUPRED2a) per exon:
+
+	Warning: No gene ID for HsaEX0022823
+	Warning: No gene ID for HsaEX7000001
+	Warning: No gene ID for HsaALTA1003947-2/3
+	Warning: No gene ID for HsaALTA1004608-1/4
+	Warning: No gene ID for HsaALTA0008207-1/2
+	Warning: No gene ID for HsaALTA1007764-1/2
+	Warning: No gene ID for HsaALTA1015093-3/5
+	Warning: No gene ID for HsaALTA1015675-2/4
+	Warning: No gene ID for HsaALTA1020694-1/2
+	Warning: No gene ID for HsaALTA1025004-1/2
+	Warning: No gene ID for HsaALTA0002336-1/2
+	Warning: No gene ID for HsaALTA1025936-1/2
+	Warning: No gene ID for HsaALTA1034259-2/4
+	Warning: No gene ID for HsaALTA1034259-3/4
+	Warning: No gene ID for HsaALTA1039062-1/2
+	Warning: No gene ID for HsaALTA1039601-1/2
+	Warning: No gene ID for HsaALTA1040283-2/4
+	Warning: No gene ID for HsaALTA1040635-2/4
+	Warning: No gene ID for HsaALTA1042545-2/3
+	Warning: No gene ID for HsaALTA0005018-2/3
+	Warning: No gene ID for HsaALTA1043927-1/5
+	Warning: No gene ID for HsaALTA1044599-1/3
+	Warning: No gene ID for HsaALTA1045318-2/3
+	Warning: No gene ID for HsaALTA1050021-1/2
+	Warning: No gene ID for HsaALTA1051546-1/2
+	Warning: No gene ID for HsaALTA1052113-2/3
+	Warning: No gene ID for HsaALTA1053181-4/7
+	Warning: No gene ID for HsaALTA1053181-5/7
+	Warning: No gene ID for HsaALTA1053181-6/7
+	Warning: No gene ID for HsaALTA1053702-1/3
+	Warning: No gene ID for HsaALTA1053891-1/2
+	Warning: No gene ID for HsaALTA1055070-1/2
+	Warning: No gene ID for HsaALTA1055244-5/7
+	Warning: No gene ID for HsaALTA1055245-3/4
+	Warning: No gene ID for HsaALTA1055647-1/2
+	Warning: No gene ID for HsaALTA1056211-1/2
+	Warning: No gene ID for HsaALTA0002181-1/2
+	Warning: No gene ID for HsaALTA1058536-1/3
+	Warning: No gene ID for HsaALTA1060763-1/2
+	Warning: No gene ID for HsaALTA0001606-3/4
+	Warning: No gene ID for HsaALTD1005226-2/4
+	Warning: No gene ID for HsaALTD0003693-1/2
+	Warning: No gene ID for HsaALTD0005077-2/4
+	Warning: No gene ID for HsaALTD0002120-2/4
+	Warning: No gene ID for HsaALTD0005732-1/2
+	Warning: No gene ID for HsaALTD1017861-2/3
+	Warning: No gene ID for HsaALTD0005595-1/4
+	Warning: No gene ID for HsaALTD0004154-2/3
+	Warning: No gene ID for HsaALTD0006638-1/2
+	Warning: No gene ID for HsaALTD0005530-2/3
+	Warning: No gene ID for HsaALTD0005603-1/4
+	Warning: No gene ID for HsaALTD1044197-2/3
+	Warning: No gene ID for HsaALTD1048122-2/3
+
+
+---------- IUPRED RESULTS: REFERENCE DISORDER RATES OBTAINED Thu Nov 14 02:34:52 PM CET 2024 --------
+
+
+
+
+------------- FUNCTIONAL DOMAINS: PFAM Thu Nov 14 02:01:02 PM CET 2024 ------------
+
+1-Finding functional domains in protein sequences.
+Algorithm (in script):
+	HMMER/3.3.2-gompi-2022a
+PFAM libraries in:
+	 scripts_folder/pfam_scan/pfam_dir
+
+A total of 200 batches are being analyzed.
+Main script:
+	scripts_folder/pfam_scan/pfam_scan.py
+
+Output:
+	Raw result: csv files, one per batch
+	Parsed result: tab files, one per batch (parsed csv)
+
+
+2-Combination of PFAM results.
+Pfam domains for all proteins (all results per batch) are parsed, sorted and collapsed.
+Output:
+	data_folder/Hs2/DISDOM/PFAM/Hs2_pfam_parsed_sorted.tab
+
+
+3-Parsing of results.
+Script:
+	scripts_folder/3-Parse_parsed_pfamout_copy.pl
+Output:
+	data_folder/Hs2/Hs2_prot_annot-PFAM.tab
+
+
+4-Functional domains overlapping EX exons obtained.
+Script:
+	scripts_folder/7-PutDomAndEv_C1AC2-v2_IZB.pl
+Output:
+	data_folder/Hs2/REFERENCE-ALL_ANNOT-Hs2-PFAM-v2.tab
+
+
+The original REFERENCE file contained 720625 lines, and the output, 720572 lines.
+A total of 53 events are missing; 2 EX events.
+
+Number of events of each type:
+ 171176 HsaALTA-/
+ 132936 HsaALTD-/
+ 223502 HsaEX
+ 192958 HsaINT
+
+
+Missing exons:
+Warnings in creating REFERENCE file with functional domains (PFAM) per exon:
+
+	Warning: No gene ID for HsaEX0022823
+	Warning: No gene ID for HsaEX7000001
+	Warning: No gene ID for HsaALTA1003947-2/3
+	Warning: No gene ID for HsaALTA1004608-1/4
+	Warning: No gene ID for HsaALTA0008207-1/2
+	Warning: No gene ID for HsaALTA1007764-1/2
+	Warning: No gene ID for HsaALTA1015093-3/5
+	Warning: No gene ID for HsaALTA1015675-2/4
+	Warning: No gene ID for HsaALTA1020694-1/2
+	Warning: No gene ID for HsaALTA1025004-1/2
+	Warning: No gene ID for HsaALTA0002336-1/2
+	Warning: No gene ID for HsaALTA1025936-1/2
+	Warning: No gene ID for HsaALTA1034259-2/4
+	Warning: No gene ID for HsaALTA1034259-3/4
+	Warning: No gene ID for HsaALTA1039062-1/2
+	Warning: No gene ID for HsaALTA1039601-1/2
+	Warning: No gene ID for HsaALTA1040283-2/4
+	Warning: No gene ID for HsaALTA1040635-2/4
+	Warning: No gene ID for HsaALTA1042545-2/3
+	Warning: No gene ID for HsaALTA0005018-2/3
+	Warning: No gene ID for HsaALTA1043927-1/5
+	Warning: No gene ID for HsaALTA1044599-1/3
+	Warning: No gene ID for HsaALTA1045318-2/3
+	Warning: No gene ID for HsaALTA1050021-1/2
+	Warning: No gene ID for HsaALTA1051546-1/2
+	Warning: No gene ID for HsaALTA1052113-2/3
+	Warning: No gene ID for HsaALTA1053181-4/7
+	Warning: No gene ID for HsaALTA1053181-5/7
+	Warning: No gene ID for HsaALTA1053181-6/7
+	Warning: No gene ID for HsaALTA1053702-1/3
+	Warning: No gene ID for HsaALTA1053891-1/2
+	Warning: No gene ID for HsaALTA1055070-1/2
+	Warning: No gene ID for HsaALTA1055244-5/7
+	Warning: No gene ID for HsaALTA1055245-3/4
+	Warning: No gene ID for HsaALTA1055647-1/2
+	Warning: No gene ID for HsaALTA1056211-1/2
+	Warning: No gene ID for HsaALTA0002181-1/2
+	Warning: No gene ID for HsaALTA1058536-1/3
+	Warning: No gene ID for HsaALTA1060763-1/2
+	Warning: No gene ID for HsaALTA0001606-3/4
+	Warning: No gene ID for HsaALTD1005226-2/4
+	Warning: No gene ID for HsaALTD0003693-1/2
+	Warning: No gene ID for HsaALTD0005077-2/4
+	Warning: No gene ID for HsaALTD0002120-2/4
+	Warning: No gene ID for HsaALTD0005732-1/2
+	Warning: No gene ID for HsaALTD1017861-2/3
+	Warning: No gene ID for HsaALTD0005595-1/4
+	Warning: No gene ID for HsaALTD0004154-2/3
+	Warning: No gene ID for HsaALTD0006638-1/2
+	Warning: No gene ID for HsaALTD0005530-2/3
+	Warning: No gene ID for HsaALTD0005603-1/4
+	Warning: No gene ID for HsaALTD1044197-2/3
+	Warning: No gene ID for HsaALTD1048122-2/3
+
+
+-------------- PFAM RESULTS OBTAINED: REFERENCE PFAM  Thu Nov 14 03:54:59 PM CET 2024 ----------
+
+
+
+
+
+------ CLEANUP FOR DISORDER AND DOMAINS ANALYSIS Thu Nov 14 03:59:03 PM CET 2024------
+
+
+
+--Cleanup of Disordered regions Thu Nov 14 02:42:03 PM CET 2024
+
+Elimination of intermediate files generated for the analysis of disorder rate for Hs2 (IUPRED2A).
+
+Compression of:
+	Iupred results per residue (with and without cutoff): data_folder/Hs2/Hs2-iupred_result.txt
+
+
+
+--Cleanup of functional Domains Thu Nov 14 03:55:54 PM CET 2024
+
+Elimination of intermediate files generated for the analysis of functional domains for Hs2 (PFAM).
+
+Compression of:
+	Domains per exon: data_folder/Hs2/Hs2_prot_annot-PFAM.tab
+	Domains per protein: data_folder/Hs2/DISDOM/PFAM/Hs2_pfam_parsed_sorted.tab
+
+
+
+--Final elimination or compression of the rest of temporary files.
+
+
+----------- SUMMARY OF RESULTS Thu Nov 14 03:59:03 PM CET 2024 ----------
+
+Target files:
+	data_folder/Hs2/REFERENCE-ALL_ANNOT-Hs2-DisI-v2.tab.gz
+	data_folder/Hs2/REFERENCE-ALL_ANNOT-Hs2-PFAM-v2.tab.gz
+
+All resulting files:
+	  -   
+	 13K - LOG-Hs2_DISDOM.txt  
+	 22M - Hs2_prot_annot-PFAM.tab.gz  
+	 5.7M - Hs2_prot_annot-pfam-parsed-sorted.tab.gz  
+	 33M - REFERENCE-ALL_ANNOT-Hs2-PFAM-v2.tab.gz  
+	 277M - Hs2-iupred_result.txt.gz  
+	 25M - REFERENCE-ALL_ANNOT-Hs2-DisI-v2.tab.gz  
+	 36M - Hs2_prot_annot_parsed.tab.gz  
+	 47M - Hs2_CDS_annot_parsed.tab.gz  
+	 6.7M - Hs2_OKex.tab.gz  
+	 31M - Hs2_prot_annot.fasta.gz  
+	 42M - Hs2_CDS_annot.fasta.gz  
+	 51M - Hs2_annot_fake.gtf.gz  
+	 10M - FakeTranscripts-Hs2-vB.gtf.gz  
+	 3.2M - LOG_FakeTranscripts-Hs2-vB.tab  
+	 5.0M - Hs2_extraexons.tab.gz  
+	 74 - REFERENCE-ALL_ANNOT-Hs2.tab -> /users/mirimia/mirimia/XPIPE/REFERENCES/Hs2/REFERENCE-ALL_ANNOT-Hs2136.tab
+	 51 - Hs2_gDNA.fasta -> /users/mirimia/mirimia/XPIPE/GENOMES/Hs2_gDNA.fasta
+	 46 - Hs2_annot.gtf -> /users/mirimia/mirimia/XPIPE/GTF/Hs2_annot.gtf
+	 74 - Hs2.Event-Gene.IDs.txt -> /users/mirimia/projects/vast-tools/VASTDB/Hs2/FILES/Hs2.Event-Gene.IDs.txt
+
+
+Data directory:
+	/users/mirimia/izapata/projects/DisorderRegions/data
+
+Scripts directory:
+	/users/mirimia/izapata/projects/DisorderRegions/src/snakemake/GetCDS_ProtSeq_DisDom/bin
+
+Pfam library folder:
+	   
+	 Pfam-A.hmm -> /db/pfam/Pfam32.0/Pfam-A.hmm
+	 Pfam-A.hmm.dat  
+	 Pfam-A.hmm.h3m -> /db/pfam/Pfam32.0/Pfam-A.hmm.h3m
+	 Pfam-A.hmm.h3p -> /db/pfam/Pfam32.0/Pfam-A.hmm.h3p
+	 Pfam-A.hmm.h3f -> /db/pfam/Pfam32.0/Pfam-A.hmm.h3f
+	 Pfam-A.hmm.h3i -> /db/pfam/Pfam32.0/Pfam-A.hmm.h3i
+
+
+
+ --------- ANALYSIS FINISHED!!! ---------- 
+
+
+
