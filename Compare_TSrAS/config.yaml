@@ -1,0 +1,11 @@
+paths:
+  disdom: "/users/mirimia/izapata/projects/DisorderRegions/data/Obtain_DisDom"
+  data: "/users/mirimia/izapata/projects/DisorderRegions/data/Compare_TSrAS"
+  sumdat: "/users/mirimia/izapata/projects/DisorderRegions/data/Compare_TSrAS/Summary"
+  bin : "/users/mirimia/izapata/projects/DisorderRegions/src/snakemake/Compare_TSrAS/bin"
+tools:
+  condaDplyr: "/users/mirimia/izapata/projects/DisorderRegions/src/conda/Rdplyr.yaml"
+  Calc_DisXprot: "/users/mirimia/izapata/projects/DisorderRegions/src/snakemake/Compare_TSrAS/bin/DisXprot.R"
+
+variables:
+  specie: ["Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi", "Bla", "Sp2", "Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi", "Sma", "Obi"]

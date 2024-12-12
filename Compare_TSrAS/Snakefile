@@ -1,0 +1,510 @@
+########## config file #########
+configfile: "config.yaml"
+
+########## paths #########
+DIR_DATA = config["paths"]["data"]
+DIR_DISDOM = config["paths"]["disdom"]
+DIR_SUM = config["paths"]["sumdat"]
+
+########## tools #########
+CONDA_DPLYR = config["tools"]["condaDplyr"]
+DIS_X_PROT = config["tools"]["Calc_DisXprot"]
+
+########## variables #########
+SP = config["variables"]["specie"]
+
+########## targets #########
+TS_sp_tab = expand("{path}/{specie}/short_TS_AS_{specie}.tab",path=DIR_DATA, specie=SP)
+PanAS_sp_tab = expand("{path}/{specie}/short_PanAS_{specie}.tab",path=DIR_DATA, specie=SP)
+Cons_sp_tab = expand("{path}/{specie}/short_Cons_{specie}.tab",path=DIR_DATA, specie=SP)
+Cryp_sp_tab = expand("{path}/{specie}/short_Cryp_{specie}.tab",path=DIR_DATA, specie=SP)
+
+HIGH_PSI_GeneID_sp = expand("{path}/{specie}/HIGH_PSI_{specie}.tab",path=DIR_DATA, specie=SP)
+LOW_PSI_GeneID_sp = expand("{path}/{specie}/LOW_PSI_{specie}.tab",path=DIR_DATA, specie=SP)
+All_EXsets_sp = expand("{path}/{specie}/{specie}_rAS_EXONS_4g.tab",path=DIR_DATA, specie=SP)
+DisEX_EXsets_sp = expand("{path}/{specie}/DISex-{specie}_rAS_EXONS_4g.tab",path=DIR_DATA, specie=SP)
+Dis_EXsets_all = expand("{path}/DISex-All_rAS_EXONS_4g.tab",path=DIR_SUM) 
+Dom_EXsets_all = expand("{path}/DOMex-All_rAS_EXONS_4g.tab",path=DIR_SUM) 
+
+DisDom_EXsets_all = expand("{path}/DISDOMex-All_rAS_EXONS_4g.tab",path=DIR_SUM) 
+
+# Dictionary Clans-PFAMdomains
+DICT_PFAM_CLANS = expand("{path}/DICT_PFAM_CLANS.tab", path=DIR_SUM)
+
+Dis_prot_sp = expand("{path}/{specie}/{specie}_DisXprot.tab",path=DIR_DATA, specie=SP)
+#Dis_Gene_sp = expand("{path}/{specie}/DIS_GeneEx_{specie}_rAS_4g.tab",path=DIR_DATA, specie=SP)
+#Dis_GeneExSets_all = expand("{path}/DIS_GeneEx_AllSp_rAS_4g.tab",path=DIR_SUM)
+
+
+REF_EvProt_4g_SP = expand("{path}/{specie}/REF-{specie}_ExProtGene_4g.tab",path=DIR_DATA, specie=SP)
+Prot_g_TSorAS_sp = expand("{path}/{specie}/Prot_{specie}_GroupInc_TS_AS.tab",path=DIR_DATA, specie=SP)
+Gene_g_TSorAS_sp = expand("{path}/{specie}/Gene_{specie}_GroupInc_TS_AS.tab",path=DIR_DATA, specie=SP)
+
+DisProt_g_sp = expand("{path}/{specie}/ProtDis_{specie}_GroupInc_TS_AS.tab",path=DIR_DATA, specie=SP)
+DisGene_g_sp = expand("{path}/{specie}/GeneDis_{specie}_GroupInc_TS_AS.tab",path=DIR_DATA, specie=SP)
+
+DisProt_g_all = expand("{path}/ProtDis-group_Cons_TS_AS.tab",path=DIR_SUM)
+DisGene_g_all = expand("{path}/GeneDis-group_Cons_TS_AS.tab",path=DIR_SUM)
+
+
+# This 2 targets are under development...
+#TS_Coord = expand("{path}/{specie}/{specie}_TS_Ecoord.tab",path=DIR_DATA, specie=SP)
+#Prot_Coord = expand("{path}/{specie}/{specie}_Prot_coord.tab",path=DIR_DATA, specie=SP)
+
+######### rules #########
+
+rule all:
+	input:
+		DICT_PFAM_CLANS		
+
+#DisProt_g_all,
+#		DisGene_g_all
+
+
+#		DisProt_g_sp,
+#		DisGene_g_sp
+		#Prot_g_TSorAS_sp,
+		#Gene_g_TSorAS_sp		
+#REF_EvProt_4g_SP
+
+
+
+
+#		DisDom_EXsets_all
+#		Dis_EXsets_all
+#		Dom_EXsets_all
+##		TS_Coord,
+##		Prot_Coord
+#		Dis_prot_sp
+#		Dis_GeneExSets_all
+#		Dis_Gene_sp	
+#		All_EXsets_sp
+#		DisEX_EXsets_sp
+#		TS_sp_tab,
+#		PanAS_sp_tab,
+#		Cons_sp_tab,
+#		HIGH_PSI_GeneID_sp
+
+
+
+rule ExonSet_Xsp:
+	input:
+		TS_sp = DIR_DATA+"/{specie}/TS_AS_{specie}.tab",
+		PanAs_sp = DIR_DATA+"/{specie}/PanAS_{specie}.tab",
+		InclLev_sp = DIR_DATA+"/{specie}/InclLevels_{specie}.tab",
+		eventID_geneID = DIR_DISDOM+"/{specie}/{specie}.Event-Gene.IDs.txt" 
+	
+	output:
+		sum_TS_sp = DIR_DATA+"/{specie}/short_TS_AS_{specie}.tab",
+   		sum_PanAs_sp = DIR_DATA+"/{specie}/short_PanAS_{specie}.tab",
+                sum_const_sp = DIR_DATA+"/{specie}/short_Cons_{specie}.tab",
+		sum_crypt_sp = DIR_DATA+"/{specie}/short_Cryp_{specie}.tab",
+		highPSI_EX = DIR_DATA+"/{specie}/HIGH_PSI_{specie}.tab",
+		lowPSI_EX = DIR_DATA+"/{specie}/LOW_PSI_{specie}.tab"
+	
+	shell:
+		"""
+		cat {input.TS_sp}| tail -n +2 | \
+		awk -v FS="\t" -v OFS="\t" -v sp="{wildcards.specie}" '{{ print sp,$2,$29,$31,$30,$7,$23}}' > {output.sum_TS_sp} ;
+		
+		cat {input.PanAs_sp}| tail -n +2 | \
+		awk -v FS="\t" -v OFS="\t" -v sp="{wildcards.specie}" -v type="PanAS" '{{ print sp,$3,$2,type,$1,type,type}}' > {output.sum_PanAs_sp};
+		
+		echo -e "EVENT\tGeneID\tType" > {output.highPSI_EX};
+		join -t $'\t' <(cat {input.eventID_geneID} | tail -n +2 | grep -v "^Event"  | sort -t $'\t' -k1,1 | uniq ) \
+		<(cat {input.InclLev_sp}| tail -n +2 | cut -f2,10 | grep "HIGH_PSI" | grep "EX" | sort -t $'\t' -k1,1) >> {output.highPSI_EX}
+
+		echo -e "EVENT\tGeneID\tType" > {output.lowPSI_EX};
+		join -t $'\t' <(cat {input.eventID_geneID} | tail -n +2 | grep -v "^Event"  | sort -t $'\t' -k1,1 | uniq ) \
+		<(cat {input.InclLev_sp}| tail -n +2 | cut -f2,10 | grep "LOW_PSI" | grep "EX" | sort -t $'\t' -k1,1) >> {output.lowPSI_EX}
+	
+
+		num_TS=$(cat {output.sum_TS_sp}| tail -n +2 |  wc -l);
+		num_PanAS=$(cat {output.sum_PanAs_sp}| tail -n +2 | wc -l);
+		num_Cons=$(((num_TS > num_PanAS ? num_TS : num_PanAS) * 125 / 100));
+		echo "This is the numbers for {wildcards.specie} : $num_TS + $num_PanAS =  $num_Cons";
+	
+		cat {output.highPSI_EX} | tail -n +2 | shuf -n $num_Cons |\
+		awk -v FS="\t" -v OFS="\t" -v sp="{wildcards.specie}" -v type="Constitutive" -v og="na" '{{ print sp,$0,og,type,type}}' > {output.sum_const_sp};
+
+		cat {output.lowPSI_EX} | tail -n +2 | grep -v -f <(cut -f2 {input.TS_sp}) | shuf -n $num_Cons |\
+		awk -v FS="\t" -v OFS="\t" -v sp="{wildcards.specie}" -v type="Cryptic" -v og="na" '{{ print sp,$0,og,type,type}}' > {output.sum_crypt_sp};
+
+		"""
+
+rule Comb_ExonSet_Xsp:
+	input:
+		sum_TS_sp = DIR_DATA+"/{specie}/short_TS_AS_{specie}.tab",
+   		sum_PanAs_sp = DIR_DATA+"/{specie}/short_PanAS_{specie}.tab",
+                sum_const_sp = DIR_DATA+"/{specie}/short_Cons_{specie}.tab",
+		sum_crypt_sp = DIR_DATA+"/{specie}/short_Cryp_{specie}.tab"
+	
+	output:
+		combExonSets_SP = DIR_DATA+"/{specie}/{specie}_rAS_EXONS_4g.tab"
+	shell:
+		"""
+		echo -e "Species\tEventID\tGeneID\tType\tOG_ID\tTissue1\tAssociated_Tissue" > {output};
+		cat {input.sum_TS_sp} {input.sum_PanAs_sp} {input.sum_const_sp} {input.sum_crypt_sp} >> {output};
+		rm {input.sum_TS_sp} {input.sum_PanAs_sp} {input.sum_const_sp} {input.sum_crypt_sp} ; 
+
+		"""
+# DISORDER
+rule Dis_EX_sp:
+	input:
+		combExonSets_SP = DIR_DATA+"/{specie}/{specie}_rAS_EXONS_4g.tab",
+		DisRef = DIR_DISDOM+"/{specie}/REFERENCE-ALL_ANNOT-{specie}-DisI-v2.tab.gz"
+	
+	output:
+		Disex_ExonSets_SP = DIR_DATA+"/{specie}/DISex-{specie}_rAS_EXONS_4g.tab"
+	shell:
+		"""
+		join -t $'\t' -1 2 -2 1 \
+		<(cat {input.combExonSets_SP} | tail -n +2 | sort -t $'\t' -k2,2) \
+		<(zcat {input.DisRef} | tail -n +2 | cut -f2,3,12,13,14 | sort -t $'\t' -k1,1 | uniq) \
+		> {output};
+
+		"""
+rule AllSp_Dis_EX:
+	input:
+		Disex_ExonSets_SP = expand("{data_path}/{specie}/DISex-{specie}_rAS_EXONS_4g.tab", data_path=DIR_DATA,specie=SP)
+	
+	output:
+		DisAll = DIR_SUM + "/DISex-All_rAS_EXONS_4g.tab"
+	shell:
+		"""
+		if [[ ! -d {DIR_SUM} ]]; then
+			mkdir -p {DIR_SUM}
+		fi
+
+		echo -e "EventID\tSpecies\tGeneID\tType\tOG_ID\tTissue1\tAssociated_Tissue\tCoord\tC1_Dis\tA_Dis\tC2_Dis" > {output};
+		cat {input} >> {output};
+		#rm {input};
+
+		"""
+
+#rule Dis_ExGene_sp:
+#	input:
+#		Disex_sp = DIR_DATA+"/{specie}/DISex-{specie}_rAS_EXONS_4g.tab",
+#		DisGene_sp = DIR_DATA+"/{specie}/{specie}_DisXGene.tab"
+#	output:
+#		DisGeneEX_sp = DIR_DATA+"/{specie}/DIS_GeneEx_{specie}_rAS_4g.tab"
+#	
+#	shell:
+#		"""
+#		join -t $'\t' -1 3 -2 1 \
+#		<(cat {input.Disex_sp} | tail -n +2 | sort -k3,3 ) \
+#		<(cat {input.DisGene_sp} | sort -k1,1) > {output}
+#
+
+#		rm {input.DisGene_sp} {input.Disex_sp}
+#		"""
+
+#rule AllSp_Dis_ExGene:
+#	input:
+#		DisGeneEX_sp = expand("{data_path}/{specie}/DIS_GeneEx_{specie}_rAS_4g.tab", data_path=DIR_DATA,specie=SP)
+#	
+#	output:
+#		DisAll = DIR_SUM + "/DIS_GeneEx_AllSp_rAS_4g.tab"
+#	shell:
+#		"""
+#		if [[ ! -d {DIR_SUM} ]]; then
+#			mkdir -p {DIR_SUM}
+#		fi
+#	
+#		echo -e "EventID\tSpecies\tGeneID\tType\tOG_ID\tTissue1\tTissue2\tAssociated_Tissue\tC1_Dis\tA_Dis\tC2_Dis\tGene_Dis" > {output};
+#		cat {input} | \
+#		awk -v FS="\t" -v OFS="\t" '{{ print $2,$3,$1,$4,$5,$6,$7,$8,$9,$10,$11,$12}}' >> {output};
+#		rm {input};
+#
+#		"""
+#### DOMAINS
+rule Dom_EX_sp:
+	input:
+		combExonSets_SP = DIR_DATA+"/{specie}/{specie}_rAS_EXONS_4g.tab",
+		DomRef = DIR_DISDOM+"/{specie}/REFERENCE-ALL_ANNOT-{specie}-PFAM-v2.tab.gz" 
+	
+	output:
+		Domex_ExonSets_SP = DIR_DATA+"/{specie}/DOMex-{specie}_rAS_EXONS_4g.tab"
+	shell:
+		"""
+		join -t $'\t' -1 2 -2 1 \
+		<(cat {input.combExonSets_SP} | tail -n +2 | sort -t $'\t' -k2,2) \
+		<(zcat {input.DomRef} | tail -n +2 | cut -f2,3,10 | sort -t $'\t' -k1,1 | uniq) \
+		> {output};
+
+		"""
+
+rule AllSp_Dom_EX:
+	input:
+		Domex_ExonSets_SP = expand("{data_path}/{specie}/DOMex-{specie}_rAS_EXONS_4g.tab", data_path=DIR_DATA,specie=SP)
+	
+	output:
+		DomAll = DIR_SUM + "/DOMex-All_rAS_EXONS_4g.tab"
+	shell:
+		"""
+		if [[ ! -d {DIR_SUM} ]]; then
+			mkdir -p {DIR_SUM}
+		fi
+
+		echo -e "EventID\tSpecies\tGeneID\tType\tOG_ID\tTissue1\tAssociated_Tissue\tCoord\tA_Dom" > {output};
+		cat {input} >> {output};
+		rm {input};
+
+		"""
+
+## Combine tables DIS and DOM
+rule Comb_Dis_Dom:
+	input:
+		DomAll = DIR_SUM + "/DOMex-All_rAS_EXONS_4g.tab",
+		DisAll = DIR_SUM + "/DISex-All_rAS_EXONS_4g.tab" 
+	
+	output:
+		DisDomAll = DIR_SUM + "/DISDOMex-All_rAS_EXONS_4g.tab"
+	shell:
+		"""
+		echo -e "EventID\tSpecies\tGeneID\tType\tOG_ID\tTissue1\tAssociated_Tissue\tCoord\tC1_Dis\tA_Dis\tC2_Dis\tA_Dom" > {output}; 
+		join -t $'\t' -1 1 -2 1 <(cat {input.DisAll} | tail -n +2 | sort -t $'\t' -k1,1 ) \
+		<(cut -f1,9 {input.DomAll} | tail -n +2 | sort -t $'\t' -k1,1) >> {output};
+		rm {input.DisAll} {input.DomAll};
+
+		"""
+
+#### Get EX-Prot-Gene
+
+rule ExProtGene_sp:
+	input:
+		combExonSets_SP = DIR_DATA+"/{specie}/{specie}_rAS_EXONS_4g.tab",
+		Ref = DIR_DISDOM+"/{specie}/REFERENCE-ALL_ANNOT-{specie}.tab",
+		OKex =  DIR_DISDOM+"/{specie}/{specie}_OKex.tab.gz"
+	output:
+		Ref_ExProtGene_SP = DIR_DATA+"/{specie}/REF-{specie}_ExProtGene_4g.tab"
+	params:
+		Ecoord1 =  DIR_DATA+"/{specie}/{specie}_ExCoord1_4g.tab",
+		Ecoord2 =  DIR_DATA+"/{specie}/{specie}_rAS_Coord_4g.tab",
+		OkCoord =  DIR_DATA+"/{specie}/{specie}_OKcoord.tab"
+	shell:
+		"""
+		join -t $'\t' -1 2 -2 1 \
+		<(cat {input.combExonSets_SP} | tail -n +2 | sort -t $'\t' -k2,2) \
+		<(cat {input.Ref} | tail -n +2 | cut -f2,3 | sort -t $'\t' -k1,1 | uniq) \
+		> {params.Ecoord1};
+		
+		cat {params.Ecoord1} |\
+		awk -v FS="\t" -v OFS="\t" '{{split($8, fcoord, ":"); scoord = fcoord[2] ;  print $3":"scoord,$0}}' > {params.Ecoord2};
+
+		zcat {input.OKex} |\
+                awk -v FS="\t" -v OFS="\t" '{{print $1":"$3,$2}}' > {params.OkCoord};
+
+		join -t $'\t' -1 1 -2 1 \
+		<(cat {params.Ecoord2} | sort -t $'\t' -k1,1) \
+		<(cat {params.OkCoord} | sort -t $'\t' -k1,1) |\
+		cut -f2,3,4,5,6,7,8,9,10 > {output};
+		rm {params.Ecoord1} {params.Ecoord2} {params.OkCoord};
+
+		"""
+
+rule PG_Group_AScontent_sp:
+	input:
+		Ref_ExProtGene_SP = DIR_DATA+"/{specie}/REF-{specie}_ExProtGene_4g.tab"
+	output:
+		Prot_gTSoAS_sp =  DIR_DATA+"/{specie}/Prot_{specie}_GroupInc_TS_AS.tab",
+		Gene_gTSoAS_sp =  DIR_DATA+"/{specie}/Gene_{specie}_GroupInc_TS_AS.tab"	
+	params:
+		TS_P =  DIR_DATA+"/{specie}/P_{specie}_TS.tab",
+		AS_P =  DIR_DATA+"/{specie}/P_{specie}_AS.tab",
+		noTS_P =  DIR_DATA+"/{specie}/P_{specie}_noTS.tab",
+		noAS_P =  DIR_DATA+"/{specie}/P_{specie}_noAS.tab",
+		TS_G =  DIR_DATA+"/{specie}/G_{specie}_TS.tab",
+		AS_G =  DIR_DATA+"/{specie}/G_{specie}_AS.tab",
+		noTS_G =  DIR_DATA+"/{specie}/G_{specie}_noTS.tab",
+		noAS_G =  DIR_DATA+"/{specie}/G_{specie}_noAS.tab"
+	
+	shell:
+		"""
+		# Proteins (with the gene):
+		cut -f2,3,4,9 {input} |\
+		awk -v FS="\t" -v OFS="\t" -v ts="YES" -v as="YES" '$3=="TS_AS" {{print $1,$4,$2,ts,as}}' |\
+		sort | uniq > {params.TS_P}; 
+		
+		cut -f2,3,4,9 {input} |\
+		grep -v -f <(cut -f2 {params.TS_P}) |\
+		awk -v FS="\t" -v OFS="\t" -v ts="NO" -v as="YES" '$3=="PanAS" {{print $1,$4,$2,ts,as}}' |\
+		sort | uniq > {params.AS_P}; 
+		
+		cut -f2,3,4,9 {input} |\
+		grep -v -f <(cut -f2 {params.TS_P}) |\
+		awk -v FS="\t" -v OFS="\t" -v ts="NO" -v as="-" '$3=="HIGH_PSI" {{print $1,$4,$2,ts,as}}' |\
+		sort | uniq > {params.noTS_P}; 
+		
+		cut -f2,3,4,9 {input} |\
+		grep -vf <(cut -f2 {params.TS_P}) |\
+		grep -vf <(cut -f2 {params.AS_P}) |\
+		awk -v FS="\t" -v OFS="\t" -v ts="NO" -v as="NO" '$3=="HIGH_PSI" {{print $1,$4,$2,ts,as}}' |\
+		sort | uniq > {params.noAS_P}; 
+	
+		cat {params.TS_P} {params.AS_P} {params.noTS_P} {params.noAS_P} > {output.Prot_gTSoAS_sp};
+		rm {params.TS_P} {params.AS_P} {params.noTS_P} {params.noAS_P};
+
+		# Genes only
+		cut -f2,3,4 {input} |\
+		awk -v FS="\t" -v OFS="\t" -v ts="YES" -v as="YES" '$3=="TS_AS" {{print $1,$2,ts,as}}' |\
+		sort | uniq > {params.TS_G}; 
+		
+		cut -f2,3,4 {input} |\
+		grep -v -f <(cut -f2 {params.TS_G}) |\
+		awk -v FS="\t" -v OFS="\t" -v ts="NO" -v as="YES" '$3=="PanAS" {{print $1,$2,ts,as}}' |\
+		sort | uniq > {params.AS_G}; 
+		
+		cut -f2,3,4 {input} |\
+		grep -v -f <(cut -f2 {params.TS_G}) |\
+		awk -v FS="\t" -v OFS="\t" -v ts="NO" -v as="-" '$3=="HIGH_PSI" {{print $1,$2,ts,as}}' |\
+		sort | uniq > {params.noTS_G}; 
+		
+		cut -f2,3,4 {input} |\
+		grep -vf <(cut -f2 {params.TS_G}) |\
+		grep -vf <(cut -f2 {params.AS_G}) |\
+		awk -v FS="\t" -v OFS="\t" -v ts="NO" -v as="NO" '$3=="HIGH_PSI" {{print $1,$2,ts,as}}' |\
+		sort | uniq > {params.noAS_G}; 
+				
+		cat {params.TS_G} {params.AS_G} {params.noTS_G} {params.noAS_G} > {output.Gene_gTSoAS_sp};
+		rm {params.TS_G} {params.AS_G} {params.noTS_G} {params.noAS_G};
+
+		"""
+
+# Calculate disorder rate per protein and gene: 
+rule Dis_ProtGene_sp:
+	input:
+		iupred_res = DIR_DISDOM+"/{specie}/{specie}-iupred_result.txt.gz",
+		OKex =  DIR_DISDOM+"/{specie}/{specie}_OKex.tab.gz"	
+	output:
+		DisProt_sp = DIR_DATA+"/{specie}/{specie}_DisXprot.tab",
+		DisGene_sp = DIR_DATA+"/{specie}/{specie}_DisXGene.tab"
+	params:
+		col_iupred_res = "5", # Col iupred result (default: 5)
+		DisProt_noG = DIR_DATA+"/{specie}/{specie}_DisXprot_woGene.tab"
+	conda:
+		CONDA_DPLYR
+	shell:
+		"""
+		
+		Rscript --vanilla {DIS_X_PROT} {input.iupred_res} 1 {params.col_iupred_res} {params.DisProt_noG}
+		join -t $'\t' -1 2 -2 1 \
+		<(zcat {input.OKex} | cut -f1,2 | sort -k2,2 | uniq) \
+		<(cat {params.DisProt_noG} | sort -k1,1) > {output.DisProt_sp}
+
+		Rscript --vanilla {DIS_X_PROT} {output.DisProt_sp} 2 3 {output.DisGene_sp}
+		sort -k2,2 -o {output.DisProt_sp} {output.DisProt_sp}
+		rm {params.DisProt_noG} 
+		
+		"""
+
+rule Comb_Dis_PG_gAS_sp:
+	input:
+		DisProt = DIR_DATA+"/{specie}/{specie}_DisXprot.tab",
+		DisGene = DIR_DATA+"/{specie}/{specie}_DisXGene.tab",
+		ProtGroup =  DIR_DATA+"/{specie}/Prot_{specie}_GroupInc_TS_AS.tab",
+		GeneGroup =  DIR_DATA+"/{specie}/Gene_{specie}_GroupInc_TS_AS.tab"
+	output:
+		Dis_Prot_G = DIR_DATA+"/{specie}/ProtDis_{specie}_GroupInc_TS_AS.tab",
+		Dis_Gene_G = DIR_DATA+"/{specie}/GeneDis_{specie}_GroupInc_TS_AS.tab"
+	shell:
+		"""
+		# Dis in prot
+		join -t $'\t' -1 2 -2 1 \
+		<(cut -f1,2,4,5 {input.ProtGroup} | sort -k2,2 ) \
+		<(cat {input.DisProt} | cut -f1,3 | sort -k1,1) > {output.Dis_Prot_G}
+	
+		# Dis in gene
+		join -t $'\t' -1 2 -2 1 \
+		<(cat {input.GeneGroup} | sort -k2,2 ) \
+		<(cat {input.DisGene} | sort -k1,1) > {output.Dis_Gene_G}
+			
+		# Remove intermediate files (not needed for now)
+		rm {input.ProtGroup} {input.GeneGroup} {input.DisProt} {input.DisGene};
+		
+		"""
+
+
+rule All_PGgroup_Dis:
+	input:
+		Dis_prot_G_sp =  expand("{data_path}/{specie}/ProtDis_{specie}_GroupInc_TS_AS.tab", data_path=DIR_DATA,specie=SP),
+		Dis_gene_G_sp =  expand("{data_path}/{specie}/GeneDis_{specie}_GroupInc_TS_AS.tab", data_path=DIR_DATA,specie=SP)
+	output:
+		DisProt_g_all = DIR_SUM+"/ProtDis-group_Cons_TS_AS.tab",
+		DisGene_g_all = DIR_SUM+"/GeneDis-group_Cons_TS_AS.tab"
+	shell:
+		"""
+
+		echo -e "ProtID\tSpecies\tTS_inc\tASr_incl\tDis" > {output.DisProt_g_all};
+		cat {input.Dis_prot_G_sp} >> {output.DisProt_g_all};
+
+		echo -e "GeneID\tSpecies\tTS_inc\tASr_incl\tDis" > {output.DisGene_g_all};
+		cat {input.Dis_gene_G_sp} >> {output.DisGene_g_all};
+
+		rm {input.Dis_prot_G_sp} {input.Dis_gene_G_sp};
+
+		"""
+
+
+
+
+
+
+####
+# Connect TS exons with their proteins
+
+# This is in development. I am not sure about what I will use it for...
+rule Comb_Ex_Prot:
+	input:
+		TS_sp = DIR_DATA+"/{specie}/TS_AS_{specie}.tab",
+		prot_parsed = DIR_DISDOM+"/{specie}/{specie}_prot_annot_parsed.tab.gz"	
+	output:
+		TS_Ecoord = DIR_DATA+"/{specie}/{specie}_TS_Ecoord.tab",
+		Pcoord = DIR_DATA+"/{specie}/{specie}_Prot_coord.tab"
+	shell:
+		"""
+		cat {input.TS_sp} | tail -n +2 | cut -f2,3,29 | \
+		awk -v FS="\t" -v OFS="\t" '{{split($2, fcoord, ":"); scoord = fcoord[2] ;  print $3":"scoord,$1}}' > {output.TS_Ecoord};	
+		zcat {input.prot_parsed} | cut -f1,3,6 |\
+		awk -v FS="\t" -v OFS="\t" '{{print $1":"$3,$2,$1}}' > {output.Pcoord};
+		"""
+
+
+
+
+# Obtain Domains per protein
+
+
+
+# Get clans for the domains
+rule Pfam_Clans_sp:
+	input:
+		pfam_parsed = DIR_DISDOM+"/{specie}/{specie}_prot_annot-pfam-parsed-sorted.tab.gz"
+	output:
+		pfam_clan_sp = DIR_DISDOM+"/{specie}/{specie}_PFAM_CLANS.tab"
+	shell:
+		"""
+		zcat {input} | tail -n +2 | cut -f5,6,7 | sort | uniq > {output};
+		num=$(cat {output} | wc -l);
+		echo -e "{wildcards.specie}: $num"; 
+
+		"""
+
+rule All_Pfam_Clans:
+	input:
+		pfam_clan_sp = expand("{data_path}/{specie}/{specie}_PFAM_CLANS.tab", data_path=DIR_DISDOM,specie=SP)
+	output:
+		dict_pfam_clans = DIR_SUM+"/DICT_PFAM_CLANS.tab"
+	shell:
+		"""
+		echo -e "ID\tNAME\tCLAN" > {output};
+		cat {input} | sort | uniq >> {output};
+		rm {input};
+
+		"""
+
+
+
+
+#expand("{data_path}/, data_path=DIR_DATA,specie=SP)
+
