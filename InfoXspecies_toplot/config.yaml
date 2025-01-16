@@ -1,9 +1,0 @@
-paths:
-  data: "/users/mirimia/izapata/projects/DisorderRegions/data/Obtain_DisDom"
-  sumdat: "/users/mirimia/izapata/projects/DisorderRegions/data/Obtain_DisDom/Summary"
-  bin : "/users/mirimia/izapata/projects/DisorderRegions/src/snakemake/InfoXspecies_toplot/bin"
-tools:
-  
-variables:
-  specie: ["Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi", "Bla", "Sp2", "Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi", "Sma", "Obi"]
-  vastdb_sp: ["Hs2","Mm2","Bt2","Gga","Dre","Dme"]
