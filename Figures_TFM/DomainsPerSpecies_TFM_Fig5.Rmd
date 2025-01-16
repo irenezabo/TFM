@@ -1,0 +1,194 @@
+---
+title: "DomainPerSpecies"
+output: html_document
+date: "2024-11-18"
+params:
+  datadir: "/users/mirimia/izapata/projects/DisorderRegions/data"
+  sumdir: "/users/mirimia/izapata/projects/DisorderRegions/data/Obtain_DisDom/Summary"
+  DomA: "DomA_AllSp.tab.gz"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries}
+knitr::opts_chunk$set(echo = TRUE)
+#Libraries
+require(ggplot2) # figures
+require(tidyr)  # data manipulation
+require(dplyr)  # data manipulation
+require(stringr) # str_split, text manipulation in tables
+
+# Params
+# internal abbreviations of species
+ordered_species = c("Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi", "Bla", "Sp2", "Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi", "Sma", "Obi")
+
+# real abbreviations of species
+real_species = c("Hs2"="Hsa", "Mm2"="Mmu", "Bt2"="Bta", "Mdo"="Mdo", "Gga"="Gga", "Xtr"="Xtr", "Dre"="Dre", "Cmi"="Cmi", "Bla"="Bla", "Sp2"="Spu", "Dme"="Dme", "Eba"="Eba", "Aae"="Aae", "Bmo"="Bmo", "Tca"="Tca", "Ame"="Ame", "Bge"="Bge", "Cdi"="Cdi", "Sma"="Sma", "Obi"="Obi")
+
+# Specties in VastDB at present
+vastdb_species = c("Hs2", "Mm2", "Bt2","Gga","Dre","Dme")
+
+# Clades
+Deuterostoma = c("Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi", "Bla", "Sp2")
+Protostoma = c("Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi", "Sma", "Obi")
+
+# Aesthetics
+
+vastdv_colors=c("Hs2"="#00BFFF", "Mm2"="#159DFF", "Bt2"="#1873CD",
+                "Gga"="#3F3F8B", "Dre"="#82359D","Dme"="red")
+
+
+species_colors = c("Hs2"="#00BFFF", "Mm2"="#159DFF", "Bt2"="#1873CD", "Mdo"="#174B8B", "Gga"="#3F3F8B", "Xtr"="#64398B","Dre"="#82359D", "Cmi"="#9932CC", "Bla"="#2E8B57", "Sp2"="#96B12B", rev(c("Obi"="#FFFF00","Sma"="#FFCC33", "Cdi"="goldenrod", "Bge"="burlywood2", "Ame"="#FF9966", "Tca"="#FF6600","Bmo"="#CC6600", "Aae"="#993300", "Eba"="firebrick3", "Dme"="red")))
+
+colTypes<-c("FE"="#E72A8A","PD"="#E6AB02","PU"="#A6761D","WD"="#7570B3") # overlap type
+```
+
+
+# Load table
+Load table with informaiton of the functional domains (PFAM) detected to overlap with all exon skippin (EX) alternatively spliced (AS) events for the 20 bilaterian species.
+
+```{r DomPerSp}
+# Read File for human
+DomSp<-read.table(paste0(params$sumdir,"/",params$DomA), 
+                  stringsAsFactors = T, header=F, na.strings="na", sep = "\t",
+                  quote = "",comment.char = "", fill = TRUE)
+
+# Asign column names 
+colnames(DomSp)<-c("Species","Event","Domain")
+
+# Data manipulation:
+# species as ordered factors, add clade, 
+#add "detected" column, at least 1 overlap in the event? Yes/no
+
+DomSp = DomSp %>%
+  mutate(Species = factor(Species, levels=ordered_species)) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma"))) %>%
+  mutate(Detected = ifelse(Domain=="NO", "NO", "YES")) %>%
+  mutate(Detected = factor(Detected, levels=c("NO","YES")))
+```
+
+# Fig 5A
+Figure with stacked bars showing the number of events with ("YES") or withouth ("NO") at least one overlap with a functional domain.
+
+
+```{r DomPerSp}
+# Data preparation: Accumulation of events
+YNdom<-DomSp %>%
+  select(Species,Detected) %>%
+  group_by(Species, Detected) %>%
+  summarise(Freq = n()) %>%
+  mutate(Species = factor(Species, levels=ordered_species)) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma")))
+
+# Compute the percentage of "YES" per species
+percent<-YNdom %>%
+  select(Species, Detected, Freq, Clade) %>%
+  left_join(DomSp %>% 
+              select(Species) %>%
+              group_by(Species) %>%
+              summarise(Total = n()), 
+            by="Species") %>%
+  mutate(Percentage=round(100*Freq/Total,2)) %>%
+  filter(Detected=="YES") %>%
+  select(Species, Percentage, Total, Clade)
+```
+
+Plot Fig. 5a
+
+```{r}
+# Plot: count, total number (text with "YES" proportions)
+p5a<-ggplot(YNdom %>% rename(Domain=Detected)) +
+  aes(x = Species, y = Freq, fill = Domain) +
+  geom_bar(stat = "identity") + 
+  geom_text(data=percent ,
+            aes(x=Species, y=8000, label=round(Percentage,0), fill=NULL), 
+            color="white", size=rel(2.5), angle=0) +
+  labs(y="number") +
+  scale_fill_manual(values=c("grey85","grey15")) +
+  facet_wrap(~Clade, scales="free_x") +
+  theme_bw() +
+  theme(legend.position="none",  
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, color="black"),
+        axis.text.y = element_text(color="black")) +
+  scale_x_discrete(labels=real_species)
+```
+
+# Figure 5B: Overlaps
+
+Data preparation: split the information of the domain in order to extract the name and type of overlap.
+
+```{r NameDom}
+# Getting overlap name and type (FE, WD, PU, PD)
+df <- DomSp %>%
+  select(Species,Event,Domain) %>%
+  mutate(Domain = str_split(Domain, ",")) %>%
+  unnest(Domain) %>%
+  mutate(Name=str_extract(Domain, "=(.*?)=")) %>%
+  mutate(Name=gsub("=","",Name)) %>%
+  mutate(Type=str_extract(Domain, "=.*?=([A-Z]{2})")) %>%
+  mutate(Type=gsub("=.*?=","",Type)) %>%
+  mutate(Type = factor(Type)) %>%
+  mutate(Name = factor(Name)) 
+
+# Only consider events with at least one overlap,
+# and add clade
+dfType<-df %>%
+  filter(Domain!="NO") %>%
+  group_by(Species, Type) %>%
+  summarise(Freq = n()) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma")))
+```
+
+Plot Fig. 5B
+
+```{r Plot_OverapeType}
+# Plot proportions of each type of overlap, all species by Clade
+p5b<-ggplot(dfType %>% rename(Overlap=Type)) +
+  aes(x = Species, y = Freq, fill = Overlap) +
+  geom_bar(stat = "identity") + 
+  labs(y="number") +
+  scale_fill_manual(values=c(colTypes)) +
+  facet_wrap(~Clade, scales="free_x") +
+  theme_bw() +
+  theme(legend.position="none",  
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, color="black"),
+        axis.text.y = element_text(color="black")) +
+  scale_x_discrete(labels=real_species) 
+
+
+# FE: the whole exon is contained in the domain
+# WD: exon fully contains the domain
+# PD: partial overlap of both, Downstream of event
+# PU: partial overlap of both, Upstream of event
+```
+
+# Final figure 5
+
+Combine both plots.
+
+```{r}
+# Combine A and B plots
+fig5<-p5a/p5b + 
+  patchwork::plot_layout(
+    nrow=2
+  ) +
+  patchwork::plot_annotation(
+    tag_levels = "A"
+  ) &
+  theme_bw() &
+  theme(legend.position = "right", legend.direction = "vertical",
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, color="black"),
+        axis.text.y = element_text(color="black"))  
+
+# Print and save
+fig5
+#ggsave(paste0(params$sumdir,"/plots/Fig5.pdf"),width=8,height=5)
+```
+
+
+

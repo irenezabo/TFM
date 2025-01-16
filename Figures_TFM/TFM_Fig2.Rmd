@@ -1,0 +1,98 @@
+---
+title: "TFM_Fig2"
+author: "Irene Zapata Bódalo"
+date: "`r Sys.Date()`"
+output: html_document
+params: 
+  EventType: "Num_EventType_AllSp.tab"
+  workdir: "~/Documents/MASTER_BIOINFO_UOC/TFM/Irimia/Projects/DisorderedProteins/Data/Summary"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align="center",fig.dim =c(7,5), tidy=TRUE, warning = F, message = F, tidy.opts=list(width.cutoff=80), root.dir = normalizePath(params$workdir))
+```
+
+# Event types per species
+
+```{r libraries}
+knitr::opts_chunk$set(echo = TRUE)
+#Libraries
+require(ggplot2) # figures
+require(tidyr)  # data manipulation
+require(dplyr)  # data manipulation
+
+
+# Params
+# internal abbreviations of species
+ordered_species = c("Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi", "Bla", "Sp2", "Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi", "Sma", "Obi")
+
+# real abbreviations of species
+real_species = c("Hs2"="Hsa", "Mm2"="Mmu", "Bt2"="Bta", "Mdo"="Mdo", "Gga"="Gga", "Xtr"="Xtr", "Dre"="Dre", "Cmi"="Cmi", "Bla"="Bla", "Sp2"="Spu", "Dme"="Dme", "Eba"="Eba", "Aae"="Aae", "Bmo"="Bmo", "Tca"="Tca", "Ame"="Ame", "Bge"="Bge", "Cdi"="Cdi", "Sma"="Sma", "Obi"="Obi")
+
+# Clades
+Deuterostoma = c("Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi", "Bla", "Sp2")
+Protostoma = c("Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi", "Sma", "Obi")
+
+# Aesthetics
+
+species_colors = c("Hs2"="#00BFFF", "Mm2"="#159DFF", "Bt2"="#1873CD", "Mdo"="#174B8B", "Gga"="#3F3F8B", "Xtr"="#64398B","Dre"="#82359D", "Cmi"="#9932CC", "Bla"="#2E8B57", "Sp2"="#96B12B", rev(c("Obi"="#FFFF00","Sma"="#FFCC33", "Cdi"="goldenrod", "Bge"="burlywood2", "Ame"="#FF9966", "Tca"="#FF6600","Bmo"="#CC6600", "Aae"="#993300", "Eba"="firebrick3", "Dme"="red")))
+
+colTypes<-c("FE"="#E72A8A","PD"="#E6AB02","PU"="#A6761D","WD"="#7570B3") # overlap type
+
+colEvent<-c("ALTA"="#A5C568","ALTD"="#10913F","INT"="#F9A859","EX"="#7B2878")
+
+
+```
+
+
+# Data loading and manipulation
+Information on the number of AS events of each type (IR, ALTA, ALTD, EX) per species.
+
+```{r EventType}
+# Load table Event Type
+EvTsp<-read.delim(paste0(params$workdir,"/",params$EventType), 
+                  header = F, stringsAsFactors = T)
+
+# Asign column names
+colnames(EvTsp)<-c("Species","Type","Num")
+
+# Summary table (to check numbers)
+EvTsp %>%  
+  dplyr::select(Type,Num) %>%
+  group_by(Type) %>% 
+  summarise(Frequency = sum(Num))
+
+# Data manupulation: species and AS types as ordered factor, add clades
+EvTsp = EvTsp %>%
+  mutate(Species = factor(Species, levels=ordered_species)) %>%
+  mutate(Type = factor(Type, levels=c("ALTA","ALTD","INT","EX"))) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma")))
+
+```
+
+Plot
+
+```{r EventType2}
+# Figure 2
+Fig2<-ggplot(EvTsp) +
+  aes(x = Species, y = Num, fill = Type) +
+    geom_bar(stat = "identity") + 
+  labs(y="Count",
+       x="Species") +
+  scale_fill_manual(values=colEvent) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, color="black")) +
+  facet_wrap(~Clade, scales="free_x") +
+  scale_x_discrete(labels=real_species) 
+
+# Print and save
+Fig2
+#ggsave(paste0(params$workdir,"/plots/Fig2.pdf"),width=8,height=3)
+
+
+# Color only EX
+#colEvent2<-c("grey","grey","grey","#7B2878")
+
+
+```

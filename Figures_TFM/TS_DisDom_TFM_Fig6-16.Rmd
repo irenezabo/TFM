@@ -1,0 +1,1436 @@
+---
+title: "CompareEX_DisDom"
+output: html_document
+date: "2024-11-25"
+params:
+  datadir: "/users/mirimia/izapata/projects/DisorderRegions/data/Compare_TSrAS"
+  sumdir: "/users/mirimia/izapata/projects/DisorderRegions/data/Compare_TSrAS/Summary"
+  Dis: "DISDOMex-All_rAS_EXONS_4g.tab"
+  GeneDisrAS: "GeneDis-group_Cons_TS_AS.tab"
+  ProtDisrAS: "ProtDis-group_Cons_TS_AS.tab"
+    
+---
+
+```{r libraries}
+knitr::opts_chunk$set(echo = TRUE)
+#Libraries
+require(ggplot2) # figures
+require(patchwork) # combine figures
+require(ComplexHeatmap)  # heatmap (TS domains)
+require(circlize)  # colors heatmap (TS domains)
+require(tidyr)  # data table manipulation
+require(dplyr)  # data table manipulation
+require(stringr) # str_split, text manipulation in tables
+
+# Params
+# internal abbreviations of species
+ordered_species = c("Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi", "Bla", "Sp2", "Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi", "Sma", "Obi")
+
+Vertebrates = c("Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi")
+Insects = c("Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi")
+
+# real abbreviations of species
+real_species = c("Hs2"="Hsa", "Mm2"="Mmu", "Bt2"="Bta", "Mdo"="Mdo", "Gga"="Gga", "Xtr"="Xtr", "Dre"="Dre", "Cmi"="Cmi", "Bla"="Bla", "Sp2"="Spu", "Dme"="Dme", "Eba"="Eba", "Aae"="Aae", "Bmo"="Bmo", "Tca"="Tca", "Ame"="Ame", "Bge"="Bge", "Cdi"="Cdi", "Sma"="Sma", "Obi"="Obi")
+
+# Clades
+Deuterostoma = c("Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi", "Bla", "Sp2")
+Protostoma = c("Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi", "Sma", "Obi")
+
+# AS types, internal abbreviations
+ordered_exSets = c("TS_AS","PanAS","LOW_PSI","HIGH_PSI") 
+
+# AS types, real abbreviations
+real_exSets = c("TS_AS"="TS","PanAS"="PanAS", "LOW_PSI"="Cryptic", "HIGH_PSI"="Constitutive") 
+
+# Upstream, exon of interest interest (A), downstream exons
+exon_order= c("C1_Dis","A_Dis","C2_Dis")
+
+ordered_tissues = c("Neural","Testis","Ovary","Muscle","Kidney","Epithelial","DigestiveTract","Adipose","PanAS", "Cryptic","Constitutive")
+
+only_tissues=c("Neural","Testis","Ovary","Muscle","Kidney",
+               "Epithelial","DigestiveTract","Adipose")
+
+# Aesthetics
+species_colors = c("Hs2"="#00BFFF","Mm2"="#159DFF","Bt2"="#1873CD",
+                   "Mdo"="#174B8B", "Gga"="#3F3F8B", "Xtr"="#64398B",
+                   "Dre"="#82359D", "Cmi"="#9932CC", "Bla"="#2E8B57", 
+                   "Sp2"="#96B12B","Dme"="red", "Eba"="firebrick3",
+                   "Aae"="#993300","Bmo"="#CC6600","Tca"="#FF6600",
+                   "Ame"="#FF9966","Bge"="burlywood2","Cdi"="goldenrod",
+                   "Sma"="#FFCC33","Obi"="#FFFF00",
+                   "Hsa"="#00BFFF","Mmu"="#159DFF","Bta"="#1873CD","Spu"="#96B12B")
+
+
+
+#col_exSets = c("orange","yellow3","grey85","grey25")
+col_exSets = c("TS_AS"="#A23333","PanAS"="#FF6A33",
+               "LOW_PSI"="grey85",
+               "HIGH_PSI"="grey25")  
+
+col_cac<-c("#FEAC11","#FB1326","#E9CCA9") # C1, A, C2
+
+col_tissues_all<- c("Neural"="mediumblue", "Testis"="violet", "Ovary"="darkorchid", "Muscle"="springgreen3","Kidney"="gold", "Epithelial"="steelblue1", "DigestiveTract"="chocolate1", "Adipose"="firebrick1", "PanAS"="#FF6A33", "Constitutive"="grey25","Cryptic"="grey85")
+
+```
+
+# Load data: 
+Table with information on the disorder score and overlapping functional domains for all EX per species.
+
+```{r LoadFile}
+DisDom_raw<-read.table(paste0(params$sumdir,"/",params$Dis), 
+                  stringsAsFactors = T, header=T, na.strings="na", sep = "\t",
+                  quote = "",comment.char = "", fill = TRUE)
+
+# AS type and species as ordered factors, 
+#eliminate info on gene ortogroup (and the duplications it created), add clades
+DisDom_raw = DisDom_raw %>%
+  select(-OG_ID) %>%
+  unique() %>%
+  mutate(Type = factor(Type, levels=ordered_exSets)) %>%
+  mutate(Species = factor(Species, levels=ordered_species)) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma")))
+
+```
+
+
+## Fig 6
+
+### Data preparation
+Calculate number of AS events per species, dividing also TS per main tissue.
+AS types: Constitutive, Cryptic, PanAS, TS.
+
+```{r}
+# Number of events of each AS type species 
+tabSum_SpType <- DisDom_raw %>% 
+          dplyr::select(EventID,GeneID,Type,Species) %>%
+          group_by(Species,Type) %>%
+          summarise(across(everything(), ~ n_distinct(.))) %>%
+  mutate(Species = factor(Species, levels=ordered_species)) %>%
+  mutate(Type = factor(Type, levels=rev(ordered_exSets))) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma")))
+
+# TS only, divided by main tissue
+Dis_tissueOnly<-DisDom_raw %>% 
+  filter(Tissue1 %in% only_tissues) %>%
+  mutate(Tissue1 = factor(Tissue1, levels=only_tissues))
+
+#%>%
+ # mutate(Species = factor(Species, levels=ordered_species)) %>%
+  #mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  #mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma")))
+
+```
+
+
+### Plot Fig. 6
+
+```{r}
+# Events per AS type by species
+fig6a<-ggplot(data=tabSum_SpType) + 
+  aes(x=Species, y=EventID, fill=Type) +
+  geom_bar(stat = "identity") + 
+  labs(y="number of events") +
+  scale_fill_manual(values=rev(col_exSets), labels=real_exSets, name="AS type") +
+  scale_x_discrete(labels = real_species) +
+  facet_wrap(~Clade, scales="free_x") +
+  theme_bw() +
+  theme(legend.position="right",
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, color="black"),
+        axis.text.y = element_text(color="black"))
+
+
+#ggsave(paste0(params$sumdir,"/plots/Fig6A.pdf"),width=5,height=3)
+
+fig6b<-ggplot(data=Dis_tissueOnly) + 
+  aes(x = Species, fill = Tissue1) +
+  geom_bar(position = "fill") +
+  labs(y="proportion of TS", x="Species") +
+  scale_fill_manual(values=col_tissues_all[1:11], name = "Main tissue") +
+  scale_x_discrete(labels = real_species) +
+  theme_bw() +
+  theme(legend.position="right",
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, color="black"),
+        axis.text.y = element_text(color="black")) +
+  facet_wrap(~Clade, scales="free_x")
+
+
+# Combine A and B
+
+fig6AB<-(fig6a | fig6b  ) +
+  patchwork::plot_layout(nrow=2) & 
+  patchwork::plot_annotation(tag_levels = "A") &
+  theme(legend.position = "right",
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, color="black",
+                                   size=rel(1)),
+        axis.text.y= element_text(color="black"))
+
+# Print and save
+fig6AB
+
+#ggsave(paste0(params$sumdir,"/plots/Fig6.pdf"),width=6,height=6)
+```
+
+
+# Disorder rate of TS exons
+
+## Figure 7
+
+Distribution (boxplot) of disorder rates of the exon of interest (A) and surrounding exons (C1, C2). Per AS type (TS, PanAS, Cryptic, Constitutive).
+
+Preparation of the data: disorder per AS type.
+
+```{r}
+# Disorder rate per AS type, for C1, A and C2 exons (Inclusion)
+DisType <-DisDom_raw %>% 
+  dplyr::select(Type,C1_Dis,A_Dis,C2_Dis) %>%
+  pivot_longer(-Type, names_to = "Inclusion") %>% 
+  mutate(Inclusion = factor(Inclusion,levels=c("C1_Dis","A_Dis","C2_Dis"))) %>%
+  mutate(Type = factor(Type,levels=ordered_exSets)) 
+
+```
+
+Plot 
+```{r}
+# Fig 7
+fig7<-ggplot(DisType,aes(x = Inclusion, y = value, fill = Type)) +
+  geom_boxplot(width=0.75, outlier.shape = 1, outlier.size=0.8) +
+  scale_fill_manual(values=col_exSets, 
+                    labels=real_exSets, 
+                    name= "AS type") +
+  labs(x = NULL, y = "disorder rate") +
+  scale_x_discrete(labels=c("C1_Dis"="C1", "A_Dis" = "A", 
+                            "C2_Dis"="C2")) +
+  theme_bw() +
+   theme(legend.position="right", legend.direction = "vertical",  
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, color="black"),
+        axis.text.y = element_text(color="black")) 
+
+
+fig7
+#ggsave(paste0(params$sumdir,"/plots/Fig7.pdf"),width=5,height=2.5)
+
+```
+
+
+## Figure 8
+
+Delta median of the disorder rate respect of each AS type compared to Constitutive exons (difference of the median disorder rate of the category vs the median of Constitutive exons) per species. Marking the delta average.
+
+Data preparation
+```{r}
+# Computation of dis average and mean per type, per species
+av_med_TypeSp<-DisDom_raw %>% 
+  dplyr::select(Type,Species,A_Dis) %>%
+  mutate(Type = factor(Type,levels=ordered_exSets)) %>%
+  group_by(Type,Species) %>%
+  summarize(
+    av = mean(A_Dis, na.rm = TRUE),
+    med = median(A_Dis, na.rm = TRUE),
+    sd = sd(A_Dis, na.rm = TRUE),
+    count = n(),
+    .groups = "drop")
+
+# Obtain tables with deltas and combine them
+# delta average
+DeltaAv <-av_med_TypeSp %>%
+  select(Type,Species,av) %>%
+  pivot_wider(names_from = Type, values_from = av) %>%
+  mutate(dTS_av = TS_AS - HIGH_PSI, 
+         dPanAS_av = PanAS - HIGH_PSI,
+         dLOW_av = LOW_PSI - HIGH_PSI)
+
+# delta median
+DeltaMed <-av_med_TypeSp %>%
+  select(Type,Species,med) %>%
+  pivot_wider(names_from = Type, values_from = med) %>%
+  mutate(dTS_med = TS_AS - HIGH_PSI, 
+         dPanAS_med = PanAS - HIGH_PSI,
+         dLOW_med = LOW_PSI - HIGH_PSI)
+
+# delta average + delta median
+deltas_TypeSp<-av_med_TypeSp %>%
+  pivot_wider(names_from = Type, values_from = c(count,sd,av,med)) %>%
+  left_join(DeltaAv %>% select(Species,dTS_av,dPanAS_av,dLOW_av), by="Species") %>%
+  left_join(DeltaMed %>% select(Species,dTS_med,dPanAS_med,dLOW_med),by="Species") 
+
+# Format for the barplot
+av_barplot<-DeltaAv %>%
+  select(Species,dTS_av,dPanAS_av,dLOW_av) %>%
+  rename(TS_AS = dTS_av, PanAS=dPanAS_av, LOW_PSI = dLOW_av) %>%
+  pivot_longer(cols = c(TS_AS, PanAS, LOW_PSI), names_to = "Type", values_to = "DeltaAv") %>%
+  mutate(Type = factor(Type,levels=ordered_exSets)) %>%
+  left_join(av_med_TypeSp %>% select(Species,Type,count,sd), by=c("Type","Species")) %>%
+  mutate(Species = factor(Species,levels=ordered_species))
+head(av_barplot)
+
+med_barplot<-DeltaMed %>%
+  select(Species,dTS_med,dPanAS_med,dLOW_med) %>%
+  rename(TS_AS = dTS_med, PanAS=dPanAS_med, LOW_PSI = dLOW_med) %>%
+  pivot_longer(cols = c(TS_AS, PanAS, LOW_PSI), names_to = "Type", values_to = "DeltaMed") %>%
+  mutate(Type = factor(Type,levels=ordered_exSets)) %>%
+  left_join(av_med_TypeSp %>% select(Species,Type,count,sd), by=c("Type","Species")) %>%
+  mutate(Species = factor(Species,levels=ordered_species))
+
+avmed_barplot<-left_join(av_barplot, med_barplot, by= c("Type","Species", "count", "sd")) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma")))
+
+```
+
+Plot:
+
+```{r}
+# Plot
+fig8<-ggplot(avmed_barplot, aes(x = Species, y = DeltaMed, 
+                                         fill = Species)) +
+  geom_hline(yintercept = 0, linetype = "solid", 
+             color = "grey15", linewidth = 0.25) +
+  geom_errorbar(aes(ymin = DeltaMed - sd, ymax = DeltaMed + sd), width = 0.1) + 
+  geom_point(size = 2.5, shape=c(rep(21,30),rep(23,30))) +  
+  geom_point(aes(x = Species, y = DeltaAv, fill = Species),
+             size = 1.5, shape=c(rep(20,30),rep(18,30)), 
+             show.legend = FALSE) + 
+  facet_wrap(~Type, labeller=labeller(Type=real_exSets)) +
+  labs(title="Disorder rate vs Constitutive exons",
+       y = expression(Delta*"median (with "*Delta*"average)"),
+       x = "Species") +
+  scale_fill_manual(values=species_colors,labels = real_species) +
+  scale_x_discrete(labels= real_species) +
+  theme_bw() +
+  theme(legend.position="none",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust=0.5, color="black"),
+        axis.text.y= element_text(color="black"),
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 10),
+        legend.key.size = unit(0.4, "cm")) 
+
+# Print and save
+fig8
+#ggsave(paste0(params$sumdir,"/plots/Fig8.pdf"),width=8,height=3)
+
+```
+
+Statistical test (Wilcoxon, signed-rank) to see which species are significative (distribution of disorder rates of the AS type vs Constitutive exons). Correction: Benjamini-Hochberg false discovery rate (to obtain adjusted p-value).
+
+```{r}
+# Wilcoxon signed-rank,Type, BH correction (FDR)
+wtest_SpASt<-DisDom_raw %>%
+  select(Species, Type, A_Dis) %>%
+  group_by(Species) %>%
+  group_modify(~ {
+    control_dis <- .x %>% filter(Type == "HIGH_PSI") %>% pull(A_Dis)
+    .x %>%
+      filter(Type != "HIGH_PSI") %>%
+      group_by(Type) %>%
+      summarise(
+        pval = wilcox.test(A_Dis, control_dis, exact = FALSE)$p.value)
+  }) %>%
+  ungroup() %>%
+  mutate(ad.pval=p.adjust(pval, method="BH"),
+         sign.pval=ifelse(pval>0.001," ","*"),
+         sign.adj=ifelse(ad.pval>0.001," ","*"))
+
+# See table
+wtest_SpASt
+```
+
+
+## Figure 9
+Same as for figure 8 but TS exons are divided by main tissue.
+
+Statistical test (Wilcoxon, signed-rank) to see which species are significative (distribution of disorder rates of the AS type, TS separated by tissue, vs Constitutive exons). Uncorrected.
+
+```{r}
+# Wilcoxon signed-rank,Type, TS per tissue:
+wtest_TisSp<-DisDom_raw %>%
+  select(Species, Tissue1, A_Dis) %>%
+  group_by(Species) %>%
+  group_modify(~ {
+    control_dis <- .x %>% filter(Tissue1 == "Constitutive") %>% pull(A_Dis)
+    .x %>%
+      filter(Tissue1 != "Constitutive") %>%
+      group_by(Tissue1) %>%
+      summarise(
+        pval = wilcox.test(A_Dis, control_dis, exact = FALSE)$p.value)
+  }) %>%
+  ungroup()
+
+wtest_TisSp
+```
+
+Computation of delta median of the disorder rate respect of each AS type compared to Constitutive exons (difference of the median disorder rate of the category, TS divided y tissue, vs the median of Constitutive exons) per species. Marking the delta average.
+
+```{r}
+# Delta median and delta average, TS divided by tissue
+# average and median
+av_med_TissueSp<-DisDom_raw %>% 
+  dplyr::select(Tissue1,Species,A_Dis) %>%
+  mutate(Tissue1 = factor(Tissue1,levels=ordered_tissues)) %>%
+  group_by(Tissue1,Species) %>%
+  summarize(
+    av = mean(A_Dis, na.rm = TRUE),
+    med = median(A_Dis, na.rm = TRUE),
+    sd = sd(A_Dis, na.rm = TRUE),
+    count = n(),
+    .groups = "drop")
+
+# delta median
+DeltaMed_tiss <- av_med_TissueSp %>%
+  select(Tissue1, Species, med) %>%
+  pivot_wider(names_from = Tissue1, values_from = med) %>%
+  mutate(across(-c(Species, Constitutive), ~ .x - Constitutive)) %>%
+  select(-Constitutive)
+
+# Format data for the plot
+dMed_dotsTisSp<-DeltaMed_tiss %>%
+  pivot_longer(cols = ordered_tissues[ordered_tissues != "Constitutive"], 
+               names_to = "Tissue1", values_to = "DeltaMed") %>%
+  mutate(Tissue1 = factor(Tissue1,levels=ordered_tissues)) %>%
+  left_join(av_med_TissueSp %>% select(Species,Tissue1,count), by=c("Tissue1","Species")) %>%
+  mutate(Species = factor(Species,levels=rev(ordered_species)))
+
+# Add significancy
+p_SpTisTest<-dMed_dotsTisSp %>% 
+  left_join(wtest_TisSp,by=c("Species","Tissue1")) %>%
+  mutate(sign=ifelse(pval>0.001," ","*"))
+
+```
+
+
+Fig. 9A: Dotplot 
+```{r}
+# Fig9A: dotplot
+fig9a<-ggplot(p_SpTisTest) +
+  aes(x = Tissue1, y = Species, 
+      size = -log10(pval),
+      fill = DeltaMed) +
+  geom_point(color = "grey25", shape = 21, stroke=0.5,show.legend = T) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+  theme_bw() +
+  scale_y_discrete(labels= rev(real_species)) +
+  labs(x = NULL,
+       y = "Species",
+       fill = expression(Delta*"median"),
+       size="-log10(Pvalue)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text = element_text(color = "black"),
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 10),
+        legend.key.size = unit(0.4, "cm")) 
+
+# Print and save
+fig9a
+#ggsave(paste0(params$sumdir,"/plots/Fig9A.pdf"),width=6,height=5)
+
+```
+
+Figure 9B: heatmap
+```{r}
+# Fig. 9B: heatmap
+fig9b<-ggplot(p_SpTisTest, 
+                aes(x = Tissue1, y = Species, fill = DeltaMed)) +
+  geom_tile(color = "black") +
+  geom_text(aes(label = sign), color = "black", size = 4) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+  coord_fixed() +
+  theme_bw() +
+  scale_y_discrete(labels= rev(real_species)) +
+  labs(x = NULL,
+       y = NULL,
+       fill = expression(Delta*"median")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text = element_text(color = "black"),
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 10),
+        legend.key.size = unit(0.4, "cm"))
+
+# Print and save
+fig9b
+#ggsave(paste0(params$sumdir,"/plots/Fig9B.pdf"),width=6,height=5)
+
+```
+
+Final plot: combine dotplot and heatmap.
+
+```{r}
+fig9AB<-(fig9a | fig9b) +
+  patchwork::plot_layout(ncol=2, 
+                         guides="collect") & 
+  patchwork::plot_annotation(
+    tag_levels = "A") &
+  theme(legend.position = "right", legend.direction = "vertical",
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 9),
+        legend.key.size = unit(0.5, "cm"))
+
+# Print and save
+fig9AB
+#ggsave(paste0(params$sumdir,"/plots/Fig9AB.pdf"), width=8, height=5)
+```
+
+# Functional domains
+Analysis of the functional domains (PFAM) overlapping TS exons.
+
+Extract only information about the overlap for each event.
+```{r}
+Dom<-DisDom_raw %>% 
+  select(EventID,Species, GeneID, Type, Tissue1, A_Dom)
+
+# Type, tissue and species as ordered factors. Add clade.
+Dom = Dom %>%
+  rename(Domain = A_Dom) %>%
+  mutate(Type = factor(Type, levels=ordered_exSets)) %>%
+  mutate(Tissue1 = factor(Tissue1,levels=ordered_tissues)) %>%
+  mutate(Species = factor(Species, levels=ordered_species)) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma")))
+
+```
+
+
+## Figure 10
+Number (or proportion) of exons with at least one overlap with a functional domain.
+
+Create column "Detected", at least 1 overlap with functional domain in the exon? NO/YES,then, calculate the total number and proportion of events with at least 1 overlap per AS type.
+
+```{r DomainsPerEvent_Presence}
+# Domain present or absent from Event: Detected column.
+DomPresence = Dom %>%
+  filter(!is.na(Domain)) %>%
+  select(-c(GeneID)) %>%
+  unique() %>%
+  mutate(Detected = ifelse(Domain=="NO", "NO", "YES")) %>%
+  mutate(Detected = factor(Detected, levels=c("NO","YES")))
+
+# Accumulation of events: total number of events per AS type
+presence_tot_type<-DomPresence %>%
+  group_by(Type) %>%
+  summarise(Total = n()) %>%
+  arrange(Type) 
+
+# Proportion of exons with at least 1 overlap per type
+YNdom_type<-DomPresence %>%
+  group_by(Type,Detected) %>%
+  summarise(Freq = n()) %>%
+  left_join(presence_tot_type, by="Type") %>% 
+  mutate(Percent=round(100*Freq/Total,2)) %>%
+  arrange(Type,Detected) 
+
+```
+
+Figure 10A: total number of exons with at least 1 overlapping domain (with percentage of exons with overlap).
+
+```{r}
+# Plot AS type and YES/NO domains, with percentage of "yes" written
+fig10a<-ggplot(YNdom_type) +
+  aes(x = Type, y = Freq, fill = Detected) +
+  geom_bar(stat = "identity", color="black") + 
+  geom_text(data=YNdom_type %>% filter(Detected=="YES"),
+            aes(x=Type, y=Freq+1000, 
+                label=paste0(round(Percent,0),"%"), fill=NULL), 
+            size=rel(2.85),
+            color="black", angle=0) +
+  labs(y="number", x=NULL) +
+  scale_fill_manual(values=c("grey85","grey15"), 
+                    name="with domain", 
+                    labels=c("NO"="no", "YES"="yes")) +
+  scale_x_discrete(labels = real_exSets) +
+  theme_bw() +
+  theme(legend.position="right",
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, color="black"),
+        axis.text.y = element_text(color="black"))
+
+# Print and save
+fig10a
+#ggsave(paste0(params$sumdir,"/plots/Fig10A.pdf"),width=4.5,height=1.5)
+
+```
+
+Figure 10B: divided by species, "yes" colored by clade.
+
+Data preparation: compute proportion of exons with at least one overlap per species and AS type. Extra bar for all AS types combined.
+
+```{r}
+# Include a bar for "All" AS types together
+ordered_exSets_all<-c("All",ordered_exSets) # extra exSet: All
+real_exSets_all<-c("All"="All", real_exSets)
+
+# Add "all AS types",  then add column "DetectedMod", reflecting clade and "detected":
+# No domain detected: NO
+# Domain detected, Deuuterostoma: YD
+# Domain detected, Protostoma: YP
+
+DomPres_combtypes<-rbind(DomPresence %>% 
+                           mutate(Type="All"),
+                  DomPresence) %>%
+  mutate(Type = factor(Type, levels=ordered_exSets_all),
+         DetectedMod=ifelse(Detected=="YES",
+                            ifelse(Species %in% Deuterostoma,
+                                   "YD", "YP"),"NO"))
+```
+
+Plot Fig 10B
+```{r}
+# Plot: detected domain per species and AS type, colored by clade
+fig10b<-ggplot(data=DomPres_combtypes) +
+  aes(x = Species, fill = DetectedMod) +
+  geom_bar(position = "fill", color="white") +  
+  scale_y_continuous(labels = scales::percent) +  
+  geom_hline(yintercept = 0.5, linetype = "solid", 
+             color = "grey15", linewidth = 0.25)+
+  labs(y = NULL, x = "Species") +
+  scale_fill_manual(values = c("NO"="grey85",
+                               "YD"= "olivedrab3","YP"="gold"), 
+                    name="with domain", 
+                    labels=c("NO"="no", 
+                             "YD"="yes, Deuterostoma",
+                             "YP"= "yes, Protostoma")) +
+  facet_wrap(~Type, scales="free_x", ncol=3,
+             labeller=labeller(Type=real_exSets_all))+
+  scale_x_discrete(labels = real_species) +
+  theme_bw() +
+  theme(legend.position="none",
+        legend.direction="horizontal",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, 
+                                   color="black", size=7),
+        axis.text.y = element_text(color="black", size=8))
+
+# Print and save
+fig10b
+#ggsave(paste0(params$sumdir,"/plots/Fig10B.pdf"),width=6,height=3)
+```
+
+
+## Figure 11
+
+### Figure 11A
+
+Divide TS exons with at least one overlapping domain, by species.
+
+Data preparation: only "TS" exons.
+```{r}
+# Select only TS exons, combine information of tissue ("Tissue1") and "Detected".
+DomPres_tissue<-DomPresence %>%
+  filter(Type=="TS_AS") %>%
+  mutate(DetectedTis=ifelse(Detected=="YES", as.character(Tissue1), "None"),
+         DetectedTis=factor(DetectedTis, levels=c("None", only_tissues)))
+
+# Extra condition: All species together:
+DomPres_tissuecomb<-rbind(DomPres_tissue %>% 
+                           mutate(Species="All", Clade="All"),
+                  DomPres_tissue) %>%
+  mutate(Species = factor(Species, levels=c("All",ordered_species)),
+         Clade = factor(Clade, levels=c("All","Deuterostoma","Protostoma")))
+```
+
+Plot:
+```{r}
+# Plot
+fig11a<-ggplot(data=DomPres_tissuecomb) +
+  aes(x = Species, fill = DetectedTis) +
+  geom_bar(position = "fill", color="white", linewidth=0.25) + 
+  geom_hline(yintercept = 0.5, linetype = "dashed", 
+             color = "grey15", linewidth = 0.25)+
+  scale_y_continuous(labels = scales::percent) +
+  coord_cartesian(ylim=c(0, 0.5))+
+  labs(y = NULL, x = "Species") +
+  scale_fill_manual(values = c("None"="grey85",col_tissues_all), 
+                    name="Tissue") +
+  scale_x_discrete(labels = c("All"="",real_species)) +
+  facet_wrap(~Clade, scales="free_x",nrow=1, 
+             labeller=labeller(Clade=c("All"="All species",
+                                       "Deuterostoma"="Deuterostoma", 
+                                       "Protostoma"="Protostoma")))+
+  theme_bw() +
+  theme(legend.position="right",
+        legend.direction="vertical",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, 
+                                   color="black"),
+        axis.text.y = element_text(color="black"),
+        legend.key.size = unit(0.4, 'cm'),
+        legend.title = element_text(size=9), 
+        legend.text = element_text(size=7))
+
+# Print and save
+fig11a
+#ggsave(paste0(params$sumdir,"/plots/Fig11A.pdf"),width=6,height=2)
+
+```
+
+### Figure 11B
+Number of overlaps per exon per species: TS exons divided by main tissue. 
+
+Data preparation. Add a column counting the number of overlaps per exon (nDom) and a column (HisNumDom) grouping exons by categories depending on the number of overlaps: 0, 1, 2-5, >5.
+
+```{r}
+# Number of domains per exon
+Ex_DomNum<-DomPresence %>%
+  select(Species,Tissue1,Type, Detected, Domain, EventID, Clade) %>%
+  mutate(nDom=ifelse(Detected=="NO",0,
+                     str_count(Domain, ",")+1),
+         nDomHis= ifelse(nDom<2,
+                           as.character(nDom),
+                           ifelse(nDom<6, "2-5", ">5"))) %>%
+  mutate(nDomHis  = factor(nDomHis, levels=c("0","1",
+                                               "2-5",">5"))) 
+
+# Add "all" species together  
+Ex_DomNum_comb<- rbind(Ex_DomNum %>% 
+                           mutate(Species="All", Clade="All"),
+                  Ex_DomNum) %>%
+  mutate(Species = factor(Species, levels=c("All",ordered_species)),
+         Clade = factor(Clade, levels=c("All","Deuterostoma","Protostoma"))) 
+           
+
+```
+
+Plot Fig. 11B
+```{r}
+# Fig 11B: stacked histogram
+
+fig11b<-ggplot(data=Ex_DomNum_comb %>% filter(Type=="TS_AS")) +
+  aes(x = Species, fill=nDomHis) +
+  geom_bar(position = "fill", color="white", linewidth=0.05) +  
+  scale_y_continuous(labels = scales::percent) +
+  labs(y = NULL, x = "Species") +
+  scale_fill_manual(values=c("0"="grey85", "1"="#FEBC2A", "2-5"="#B93289",">5"="#0D1687"),
+                    name="domains per exon") +
+  scale_x_discrete(labels = real_species) +
+  facet_wrap(~Tissue1, scales="free_x", ncol=4)+
+  theme_bw() + theme(legend.position="bottom",
+        legend.direction="horizontal",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, 
+                                   size=7, color="black"),
+        axis.text.y = element_text(color="black", size=8))
+
+# Print and save
+fig11b
+#ggsave(paste0(params$sumdir,"/plots/Fig11B.pdf"),width=8,height=4)
+
+```
+
+## Figure 12: Overlap type
+
+First, I extracted the information of the overlaps detected in each exon: name of the domain and type of overlap. Only exons with at least 1 overlapped domain.
+
+```{r}
+# Table with name of the domain, one row per domain detected.
+DomName<-Dom %>%
+  filter(!is.na(Domain)) %>%
+  filter(Domain!="NO") %>%
+  select(Species,EventID,Type, Tissue1,Domain, Clade) %>%
+  mutate(Domain = str_split(Domain, ",")) %>%
+  unnest(Domain) %>%
+  mutate(Name=str_extract(Domain, "=(.*?)=")) %>%
+  mutate(Name=gsub("=","",Name)) %>%
+  mutate(Overlap=str_extract(Domain, "=.*?=([A-Z]{2})")) %>%
+  mutate(Overlap=gsub("=.*?=","",Overlap)) %>%
+  mutate(Overlap = factor(Overlap)) %>%
+  mutate(Perc_Dom=str_extract(Domain, "=.*?=[A-Z]{2}(.*?)=")) %>% # adapt
+  mutate(Perc_Dom=gsub("=.*?=[A-Z]{2}.","",Perc_Dom)) %>%
+  mutate(Perc_Dom=gsub("=","",Perc_Dom)) %>%
+  mutate(Perc_Dom = as.numeric(Perc_Dom)) %>%
+  mutate(Name = factor(Name)) 
+
+```
+
+### Fig. 12A-B
+
+Plots: number and proportion of category of overlap per AS type. 
+
+```{r overlap}
+# Overlaps
+fig12a<-ggplot(DomName) +
+  aes(x = Type, fill = Overlap) +
+  geom_bar(position = "stack", color="black", linewidth=0.05) +  
+  scale_y_continuous() +  
+  labs(y = "number of overlaps", 
+       x = NULL) +
+  scale_fill_manual(values = c("#E72A8A","#E6AB02","#A6761D","#7570B3")) +
+  scale_x_discrete(labels = real_exSets) +
+  theme_bw()+ 
+  theme(axis.text = element_text(color="black",
+                                 size=10))
+
+fig12b<-ggplot(DomName) +
+  aes(x = Type, fill = Overlap) +
+  geom_bar(position = "fill", color="black", linewidth=0.05) +  
+  scale_y_continuous(labels = scales::percent) +  
+  labs(y = "proportion", x = NULL) +
+  scale_fill_manual(values = c("#E72A8A","#E6AB02","#A6761D","#7570B3")) +
+  scale_x_discrete(labels = real_exSets) +
+  theme_bw() + 
+  theme(axis.text = element_text(color="black",
+                                 size=10))
+
+# Combine A and B:
+fig12ab<-(fig12a + fig12b) +
+  patchwork::plot_layout(ncol=2, 
+                         guides = 'collect') & 
+  patchwork::plot_annotation(tag_levels = "A") &
+  theme(legend.position = "right", 
+        legend.direction= "vertical",
+        axis.text = element_text(color="black",
+                                 size=10))
+
+# Print and save
+fig12ab
+#ggsave(paste0(params$sumdir,"/plots/Fig12AB.pdf"),width=8,height=3)
+
+```
+
+
+### Fig. 12C
+Proportion of overlaps of each category per AS type and species. 
+
+Data preparation: addition of "All" AS Types of the specie together. 
+```{r}
+# Add "All AS Types" together
+DomName_combtypes<-rbind(DomName %>% 
+                           mutate(Type="All"),
+                  DomName) %>%
+  mutate(Type = factor(Type, levels=ordered_exSets_all))
+```
+
+Plot: Fig. 12C
+```{r}
+# Plot Fig. 12C
+# plot
+
+fig12c<-ggplot(DomName_combtypes) +
+  aes(x = Species, fill = Overlap) +
+  geom_bar(position = "fill",color="black", linewidth=0.05) +  
+  scale_y_continuous(labels = scales::percent) + 
+  geom_hline(yintercept = 0.5, linetype = "dashed", 
+             color = "grey15", linewidth = 0.25)+
+  labs(y = NULL, x = "Species") +
+  scale_fill_manual(values = c("#E72A8A","#E6AB02","#A6761D","#7570B3")) +
+  facet_wrap(~Type, scales="free_x", ncol=3,
+             labeller=labeller(Type=real_exSets_all))+
+  scale_x_discrete(labels = real_species) +
+  theme_bw() +
+  theme(legend.position="none",
+        legend.direction="horizontal",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, 
+                                   color="black", size=7),
+        axis.text.y = element_text(color="black", size=8))
+
+# Print and save
+fig12c
+#ggsave(paste0(params$sumdir,"/plots/Fig12C.pdf"),width=6,height=3)
+
+```
+
+
+
+## Figure 13
+
+Overlaps per exon, considering all exons of the AS type (y-axis), and overlaps per exons with at least 1 overlap detected (dot size), colored by species (dot color) and divided by clade (x-axis). One plot per AS type.
+
+Data preparation: calculate total number of overlaps detected (nDomTot), number of exons with at least one overlap (ExWithDom), total number of exons (TotEx), and ratios: proportion of domains per exon (all exons, r.domXallE), and number of domains per exons with at least one domain (domXexwith). Per AS type.
+```{r}
+# Calculate domains and exons and ratios
+nDom_SpTy<-DomName %>%
+  select(EventID, Species, Type, Name) %>%
+  group_by(Species,Type,EventID) %>%
+  summarise(nDom = n()) %>%
+  group_by(Species,Type) %>%
+  summarise(nDomTot = sum(nDom),
+            ExWithDom=n()) %>%
+  left_join(DomPresence %>%
+              group_by(Type,Species) %>% 
+              summarise(TotEx = n()), 
+            by=c("Species","Type")) %>%
+  mutate(domXexwith=nDomTot/ExWithDom,
+         r.domXallE=nDomTot/TotEx) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma")))
+```
+
+Plot Fig. 13
+
+```{r}
+# Plot Fig. 13
+fig13<-ggplot(nDom_SpTy, aes(x=Clade, y=r.domXallE,
+                       size=domXexwith,
+                       fill=Species, color=Clade)) +
+  geom_hline(yintercept = 1, linetype = "solid", 
+             color = "grey", linewidth = 0.5) +
+  geom_hline(yintercept = c(0.5,1.5), linetype = "dashed", 
+             color = "grey", linewidth = 0.5) +
+  geom_point(position = position_jitter(width = 0.3, height = 0),
+              shape=21, alpha=0.9, stroke=0.5) +
+  scale_fill_manual(values=species_colors, labels=real_species) +
+  scale_color_manual(values=c("Deuterostoma"="olivedrab3",
+                              "Protostoma"="gold2")) +
+  labs(y="overlps per exon (all)",
+       x=NULL,
+       fill="Species",
+       size="overlaps per exon with domain(s)") +
+  facet_wrap(~Type, scales="free_x", ncol=4, 
+             labeller=labeller(Type=real_exSets)) +
+  theme_bw() +
+  guides(color="none") + 
+  theme(legend.position="bottom",
+        legend.direction="horizontal",
+        legend.box = "vertical",
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, 
+                                   color="black", size=9),
+        axis.text.y = element_text(color="black", size=6))
+
+# Print and save
+fig13
+#ggsave(paste0(params$sumdir,"/plots/Fig13.pdf"),width=8,height=5)
+
+```
+
+## Figure 14
+Heatmap: domains enriched in TS-exons.
+
+### Detection of TS domains
+
+Hypergeometric test, by steps.
+
+```{r}
+# Hypergeometric test: frequency of each domain per AS type (TS divided by tissue)
+# adding "Observed.all": total number of times the domain was detected, all conditions
+hg.test.raw<-DomName %>%
+  select(Species,Tissue1,Name,EventID) %>%
+  distinct() %>%
+  group_by(Species,Tissue1,Name) %>%
+  mutate(Tissue1=factor(Tissue1,levels=ordered_tissues)) %>%
+  count(Name, name="DomFreq") %>%
+  arrange(Tissue1) %>%
+  pivot_wider(names_prefix="Observed.", 
+              names_from=Tissue1, 
+              values_from=DomFreq,
+              values_fill = 0) %>%
+  mutate(
+    Observed.All= 
+      Observed.Neural + Observed.Testis + 
+      Observed.Ovary + Observed.Muscle + 
+      Observed.Kidney + Observed.Epithelial +
+      Observed.DigestiveTract + Observed.Adipose +
+      Observed.PanAS + Observed.Cryptic + Observed.Constitutive) %>%
+  arrange(Name,Species) 
+
+# Columns with the domain frequency for each AS type (TS by tissue)
+# collapsed into one column: Observed.Tissue. 
+hg.test.raw<-hg.test.raw %>%
+  pivot_longer(cols=Observed.Neural:Observed.Constitutive,
+               names_prefix="Observed.",
+               names_to="Tissue1",
+               values_to="Observed.Tissue")
+
+# Join table with information: total number of events per AS type (TS by tissue)
+hg.test.raw<-hg.test.raw %>%
+  left_join(
+    Dom %>%
+      filter(!is.na(Domain)) %>%
+      group_by(Species,Tissue1) %>%
+      summarise(TotalEv=n()) %>%
+      complete(TotalEv) %>%
+      mutate(Tissue1=factor(Tissue1,levels=ordered_tissues)) %>%
+      arrange(Tissue1, Species) %>%
+      pivot_wider(names_prefix="Total.",
+                  names_from=Tissue1, 
+                  values_from=TotalEv, 
+                  values_fill=0) %>%
+      mutate(Events.All=
+               Total.Neural + Total.Testis + 
+               Total.Ovary + Total.Muscle + 
+               Total.Kidney + Total.Epithelial +
+               Total.DigestiveTract + Total.Adipose +
+               Total.PanAS + Total.Cryptic + Total.Constitutive) %>%
+      pivot_longer(cols=Total.Neural:Total.Constitutive,
+                   names_prefix="Total.",
+                   names_to="Tissue1",
+                   values_to="Events.Tissue"),
+  by=c("Species","Tissue1")) 
+
+# Hypergeometric test: "phyper"
+hg.test.raw<-hg.test.raw %>%
+  mutate(pval=phyper(q=Observed.Tissue-1, 
+                     m= Observed.All, 
+                     n=Events.All-Observed.All,
+                     k=Events.Tissue,
+                     lower.tail=F)) %>%
+  mutate(Tissue1=factor(Tissue1,levels=ordered_tissues)) %>%
+  arrange(Name,Species,Tissue1)
+
+
+```
+
+
+Identify and save the TS exons overlapping with at least one signficantly enriched domain (in the species) identified (in the same tissue). If necessary, save them as an R object (to recover them for future analyses).
+
+```{r}
+# Select enriched domains, recover their tissue. 
+# Join with table containing the domains detected in each exon to recover exon ID
+exWithEnrDom<-hg.test.raw %>%
+  ungroup() %>%
+  filter(pval<0.05) %>%
+  select(Name,Tissue1, Species) %>%
+  left_join(
+    DomName %>% 
+      select(EventID, Name, Tissue1, Species),
+    by=c("Name","Tissue1","Species")) %>%
+  unique()
+  
+#Save object
+#save(exWithEnrDom, file=paste0(params$sumdir,"/plots/exons_with_enriched_dom.RData"))
+```
+
+
+
+Identify enriched domains of interest. Significance: p-value <0.05 (uncorrected). Enriched domains are those with enriched in the same tissue for at least 3 vertebrates, 3 insects or 5 vertebrates/insects (core species, not considering the outgroups).
+
+```{r}
+# Define "core species": only insects and vertebrates.
+CoreSp<-c(Vertebrates,Insects)
+
+# Calculate number of species where the domain is enriched
+Nsig.hg<-hg.test.raw %>%
+  select(Species,Name,Tissue1,pval,Observed.Tissue,Observed.All) %>%
+  mutate(Sig=ifelse(pval<0.05,1,0)) %>%
+  mutate(SigNoOut=ifelse(Species %in% CoreSp,Sig,0)) %>%
+  mutate(SigVert=ifelse(Species %in% Vertebrates,Sig,0)) %>%
+  mutate(SigInsect=ifelse(Species %in% Insects,Sig,0)) %>%
+  group_by(Name,Tissue1) %>%
+  summarise(
+    NumSig=sum(Sig),
+    NumSigCore=sum(SigNoOut),
+    NumVert=sum(SigVert),
+    NumIns=sum(SigInsect)) %>%
+  arrange(desc(NumSig),Name,Tissue1) 
+  
+# Apply thesholds to identify TS domains
+sel.dom<-Nsig.hg %>% 
+  filter(Tissue1 != "PanAS", 
+         Tissue1 != "Constitutive") %>%
+  filter(NumSigCore>=5 | NumVert >=3 | NumIns>=3) %>%
+  select(Name,Tissue1)
+
+# Number
+length(unique(sel.dom) %>% pull(Name))
+#45
+
+# See number of enriched domains per tissue
+sel.dom %>% group_by(Tissue1) %>% count()
+
+# Obtain name of domains (vector)
+sel.dom.v<-droplevels(unique(sel.dom %>% pull(Name)))
+
+```
+
+### Heatmap
+
+Prepare data for the heatmap. From the table with the hypergeometric test (pvalues), select only the enriched domains. Then, transform pvalue: -log10(pval). Assign different sign to Deuterostoma (+) and Protostoma (-), so they can be colored different (blue and red). Select only the necessary columns (name of the domain, tissue/AS type, species, transformed pvalue). Reshape table for the heatmap. Convert it in a matrix, name of domain in rownames.
+
+```{r}
+# Reorder species: split by clade, outgroups in the middle:
+hemirev_species = c("Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi", "Bla", "Sp2", rev(c("Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi", "Sma", "Obi")))
+
+# Data for the hm: transformation of pvalue, reformat
+hm_tab<-hg.test.raw %>%
+  filter(Name %in% sel.dom.v) %>%
+  mutate(Species=factor(Species, levels=hemirev_species)) %>%
+  mutate(logPval=-log10(pval)) %>%
+  mutate(logPval=ifelse(Species %in% Deuterostoma,logPval,-1*logPval)) %>%
+  select(Species,Name,Tissue1,logPval) %>%
+  arrange(Tissue1,Species) %>%
+  pivot_wider(names_from=c(Tissue1,Species),
+              names_expand=TRUE,
+              names_sep=".",
+              names_vary="fastest",
+              values_from=logPval,
+              values_fill=0) %>%
+  left_join(sel.dom %>% 
+              rename(MainTissue=Tissue1),by="Name") %>% 
+  arrange(factor(MainTissue, levels=ordered_tissues), desc(MainTissue))
+
+
+# Extract the tissues with enriched domains
+dom_maintiss<-hm_tab %>% 
+  mutate(MainTissue=factor(MainTissue, levels=ordered_tissues)) %>% 
+  pull(MainTissue) %>%
+  droplevels()
+
+
+# Transform table into matrix
+mat<-as.matrix(hm_tab %>% ungroup() %>% select(-Name,-MainTissue))
+rownames(mat)<-hm_tab$Name # rownames: name of the domain
+
+```
+
+
+Parameters for the heatmap:
+
+```{r}
+# Heatmap aesthetics and annotations
+col_fun = colorRamp2(c(-3, 0, 3), c("red", "grey85", "blue"))
+
+# Tissues to split columns
+split_tiss<-rep(ordered_tissues,each=20) # top bar
+
+# Annotations 
+# bottom bat, species and clades
+annot_sp_clade_col = HeatmapAnnotation(Species=rep(hemirev_species,11),
+                                 Clade=c(rep(rep(c("Deuterostoma","Protostoma"),each=10),11)),
+                                  show_annotation_name = TRUE,
+                                 col = 
+                                   list(Species = species_colors,
+                                        Clade=c("Deuterostoma"="blue3","Protostoma"="red3")),
+                                 annotation_legend_param = 
+                                   list(Species = list(title = "Species",
+                                                       at=real_species,
+                                                       legend_gp=gpar(fill=species_colors),
+                                                       ncol = 2,
+                                                       title_position = "topleft")))
+# top bab, tissues
+annot_tiss_col = HeatmapAnnotation(Tissue=rep(ordered_tissues,each=20),
+                                 col = list(Tissue=col_tissues_all),
+                               show_legend = TRUE,
+                               show_annotation_name = FALSE,
+                               annotation_legend_param = 
+                                   list(Tissue = 
+                                          list(title = "Tissue",
+                                               at=ordered_tissues,
+                                               legend_gp=gpar(fill=col_tissues_all),
+                                               ncol = 2,
+                                               title_position = "topleft")))
+
+# right bar
+annot_tiss_row = rowAnnotation(Enrichment=dom_maintiss,
+                                 col = list(Enrichment=col_tissues_all),
+                               show_legend = FALSE,
+                               show_annotation_name = FALSE,
+                               annotation_label = NULL)
+
+
+```
+
+Plot heatmap: Fig. 14
+
+```{r representSelDom}
+#HM plot
+fig14<-Heatmap(mat, 
+        # Body
+        name = "-log10(pval)", 
+        col=col_fun,
+        width = unit(8, "cm"), height = unit(14, "cm"),
+        show_row_dend = FALSE,
+        
+        # Labels
+        row_names_side = "left",
+        row_names_gp = gpar(fontsize = rep(8,nrow(mat))),
+        show_column_names = FALSE,
+
+        # Split
+        cluster_columns = FALSE,
+        row_split = dom_maintiss,
+        column_split=factor(split_tiss, levels = ordered_tissues),
+       
+         # Title  and annotations 
+        column_title_gp = gpar(fontsize = rep(10,11)),
+        column_title_rot = 45,
+        right_annotation = annot_tiss_row,
+        row_title = NULL,
+        bottom_annotation=annot_sp_clade_col,
+        top_annotation=annot_tiss_col,
+   
+        # Legend
+        heatmap_legend_param = list(
+        title = "-log10(pval)", 
+        at = c(0, 1.5, 3), 
+        labels = c("0","" ,"3"),
+        title_position = "topleft",
+        direction="horizontal")) 
+
+# Print
+draw(fig14, heatmap_legend_side = "bottom")
+
+# Save: if working in the cluster, execute it in the console:
+#png(file=paste0(params$sumdir,"/plots/Fig14.png"), width=8,height=8,units="in",res=1200 )
+#draw(fig14, heatmap_legend_side = "bottom")
+#dev.off()
+
+
+```
+
+
+## Figure 15
+
+### Muscle-specific domains
+
+Select only muscle-specific domains. Compute number of overlaps of the domain in the tissue vs in all tissues/AS types (number of times it is detected). Compute number of exons with the domain in the tissue vs in all tissues/AS types (number of exons containing the domain). Compute number of genes with exons containing the domain in the tissue.
+
+```{r}
+# Muscle specific domains
+muscldom<-droplevels(sel.dom %>% filter(Tissue1=="Muscle") %>% pull(Name)) 
+
+
+# Number of overlaps in the tissue
+muscle_dom_all_o<-DomName %>% 
+  filter(Name %in% muscldom) %>%
+  select(Species, EventID, Tissue1, Name) %>%
+  group_by(Species,Tissue1, Name) %>%
+  summarise(Overlap.Tissue=n()) %>%
+  left_join(
+    DomName %>% filter(Name %in% muscldom) %>%
+      select(Species, EventID, Tissue1, Name) %>%
+      group_by(Name, Species) %>%
+      summarise(Overlap.All=n()),
+    by=c("Name","Species")) 
+
+# Number of exons overlapping the domain in the tissue
+muscle_dom_all_e<-DomName %>% 
+  filter(Name %in% muscldom) %>%
+  select(Species, EventID, Tissue1, Name) %>%
+  unique() %>%
+  group_by(Species,Tissue1, Name) %>%
+  summarise(ExYes.Tissue=n()) %>%
+  left_join(
+    DomName %>% filter(Name %in% muscldom) %>%
+      select(Species, EventID, Tissue1, Name) %>%
+      unique() %>%
+      group_by(Name, Species) %>%
+      summarise(ExYes.All=n()),
+    by=c("Name","Species"))
+
+# Number of genes with exons overlapping the domain per tissue.
+mus_dom_gen<-DomName %>% 
+  filter(Name %in% muscldom) %>%
+  left_join(
+    Dom %>% select(EventID,GeneID) %>% unique(),
+    by="EventID") %>%
+  select(Species,GeneID, Tissue1, Name) %>%
+  unique() %>%
+  group_by(Species,Tissue1, Name) %>%
+  summarise(GenesYes.Tissue=n()) 
+
+# Combine all information
+muscle_dom_all<-full_join(
+  muscle_dom_all_o, muscle_dom_all_e,
+  by=c("Species","Tissue1","Name")) %>%
+  left_join(hg.test.raw %>%
+              select(-pval, -Observed.All,-Observed.Tissue),
+            by=c("Name","Species","Tissue1")) %>%
+  filter(Tissue1=="Muscle") %>%
+  left_join(mus_dom_gen, 
+            by=c("Species","Tissue1","Name")) %>%
+  mutate(ratio.Ex.Tissue = 1000*ExYes.Tissue/Events.Tissue,
+         ratio.Ex.All= 1000*ExYes.All/Events.All,
+         r.Ex.Tis.vs.All = ratio.Ex.Tissue / ratio.Ex.All,
+         Dom.Per.Ex.Tiss = Overlap.Tissue/ExYes.Tissue,
+         ExY.Per.Gene = ExYes.Tissue/GenesYes.Tissue,
+         Dom.Per.Gene =Overlap.Tissue/GenesYes.Tissue) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma")))
+
+
+```
+
+Plot Fig. 15. One panel per domain. Height (y-axis): fold increase of exons with domain. Number of exons with the domain in the muscle-specific exons vs number of exons with the domain in all exons. Size of the dot: overlaps per gene: number of times that the domain is detected in the genes harboring at least one exon overlapping the domain. Color of the dot: species, separated by clade (x-axis).
+
+
+```{r}
+# Order dmains per name (most to least enriched)
+muscle_dom_all<-muscle_dom_all %>%
+  mutate(Name=factor(Name, levels=muscldom))
+
+# Plot
+fig15<-ggplot(muscle_dom_all,
+       aes(x=Clade,
+           y=r.Ex.Tis.vs.All,
+           size=Dom.Per.Gene,
+           fill=Species, 
+           color=Clade)) +
+  geom_hline(yintercept = c(10,30), linetype = "dashed", 
+             color = "grey", linewidth = 0.5) +
+  geom_point(position = position_jitter(width = 0.4, height = 0),
+             shape=21, alpha=0.9, stroke=0.5)+
+  labs(x = NULL, y = "fold increase of exons with domain",
+       size="overlap per gene") +
+  scale_fill_manual(values = species_colors,
+                      labels=real_species) + 
+  scale_color_manual(values=c("Deuterostoma"="olivedrab4",
+                              "Protostoma"="gold3")) +
+  facet_wrap(~ Name, ncol=4) +
+  theme_bw() +
+  guides(color="none") +
+  theme(legend.position="bottom",
+        legend.direction="horizontal",
+        legend.box = "vertical",
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, 
+                                   color="black", size=9),
+        axis.text.y = element_text(color="black", size=8))
+
+# Print and save
+fig15
+#ggsave(paste0(params$sumdir,"/plots/Fig15.pdf"),width=8,height=8)
+
+```
+
+
+
+### Information on LRRFIP
+Table with information of LRRFIP enrichment:
+- Species
+- num.Overlaps: number of times the domain was detected in muscle-specific exons
+- num.MuscleEx: number of muscle-specific exons overlapping the domain (same than ExWithDom)
+- num.Genes: number of genes with muscle-specific exons overlapping the domain
+- Ratio1000.ExWith.vs.ExAll: 1000*muscle-specific exons overlapping the domain/ all muscle-specific exons 
+- FC.Obs.vs.Exp: fold change observed vs expected: ratio (muscle-specific exons overlapping the domain/ all muscle-specific exons) / (all exons overlapping the domain/ all exons)
+- Overlaps.x.Gene: number of times the domain is detected in the genes with muscle-specific exons overlapping the domain
+- ExWithDom.x.Gene: number of muscle-specific exons overlapping the domain per gene containing them.
+
+```{r}
+# LRRFIP enrichment
+LRRFIP_enrichment<-muscle_dom_all %>% 
+  ungroup() %>% filter(Name=="LRRFIP") %>% 
+  select(Species, Overlap.Tissue,ExYes.Tissue, GenesYes.Tissue, 
+         ratio.Ex.Tissue, r.Ex.Tis.vs.All, Dom.Per.Gene, ExY.Per.Gene) %>%
+  mutate(ratio.Ex.Tissue=round(ratio.Ex.Tissue,2),
+         r.Ex.Tis.vs.All= round(r.Ex.Tis.vs.All,2)) %>%
+  rename(num.Overlaps=Overlap.Tissue,
+         num.MuscleEx=ExYes.Tissue,
+         num.Genes=GenesYes.Tissue,
+         Ratio1000.ExWith.vs.ExAll= ratio.Ex.Tissue,
+         FC.Obs.vs.Exp= r.Ex.Tis.vs.All,
+         Overlaps.x.Gene= Dom.Per.Gene,
+         ExWithDom.x.Gene=ExY.Per.Gene)
+
+# Save tab separated table
+write.table( LRRFIP_enrichment, 
+             file=paste0(params$sumdir,"/plots/LRRFIP_in_muscle.txt"), 
+             row.names = FALSE,
+             sep="\t")
+
+```
+
+
+
+# Disorder rate and Overlapping domains, together
+## Figure 16
+
+Data manupulation.Get only events with information on disorder rate and domain. From table with information "detected": does the event overlap with a functional domain? "yes"/"no"
+
+```{r}
+# Only exons with information of disoreder rate and overlapping domain
+# obtain only columns of interest and add clade
+DisDom<- DisDom_raw %>%
+  filter(!is.na(A_Dis) & !is.na(A_Dom)) %>%
+  select(EventID, Species, Type,
+         Tissue1, A_Dis, A_Dom) %>%
+  unique() %>%
+  mutate(Type = factor(Type, levels=ordered_exSets)) %>%
+  mutate(Species = factor(Species, levels=ordered_species)) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma"))) %>%
+  rename(Dis=A_Dis, Dom=A_Dom) 
+
+
+# Create "detcted" column: event with at least 1 overlap? yes/no
+DisDom.yn<-DisDom %>%
+  mutate(Detected = ifelse(Dom=="NO", "NO", "YES")) %>%
+  mutate(Detected = factor(Detected, levels=c("NO","YES")))
+
+```
+
+
+Use information of the events enriched in TS exons to classify events depending on if they overlap a functional domain, and if they overlap with a domain significantly enriched in the tissue and species. Columns:
+- "with.enrichedDom": event with an overlap with a TS-domain
+- column "WithDom.WithEnrDom":
+- events with no overlap: "no.no"
+- events with at least 1 overlap but not of TS-domain: "yes.no"
+- events with at least 1 overlap with a TS-domain: "yes.yes"
+
+```{r}
+# If not loaded: load exons containing TS domains 
+# (TS exons with a domain that was enriched in that tissue, hypergeometric test)
+load(file=paste0(params$sumdir,"/plots/exons_with_enriched_dom.RData"))
+# loads exWithEnrDom
+
+
+# Categories of events depending on overlap with domain or TS-domain:
+dis4enrEx<-DisDom.yn %>%
+  mutate(with.enrichedDom = ifelse(EventID %in% exWithEnrDom$EventID,
+                                   "yes", "no"),
+         WithDom.WithEnrDom= ifelse(
+           Detected=="NO","no.no", 
+           ifelse(with.enrichedDom=="no", "yes.no","yes.yes"))) %>%
+  select(EventID,Species, Tissue1, Type, Dis, Dom, WithDom.WithEnrDom)
+
+# Add all events overlapping TS-domains to all events with overlap
+dis4enrEx_all<-rbind(dis4enrEx %>% 
+                 filter(WithDom.WithEnrDom=="yes.yes") %>%
+                 mutate(WithDom.WithEnrDom="yes.no"),
+               dis4enrEx)
+```
+
+Plot distribution rates for events with no overlap, with an overlapping domain, and with an overlap with a TS domain. Show medians of each group.
+
+```{r}
+# Violing plot:
+fig16<-ggplot(dis4enrEx_all) +
+  aes(x=Type, y=Dis, 
+      fill=Type) +
+  geom_violin(color="black") + 
+  geom_hline(yintercept=0.5,   linetype = "solid", 
+             color = "grey50", linewidth = 0.25) +
+  stat_summary(fun.y=median, geom="point", shape=23,
+               fill="black", color="grey", size=1.8, 
+               show.legend = FALSE) +
+
+  scale_fill_manual(values=col_exSets, labels=real_exSets) +
+  scale_x_discrete(labels=real_exSets)  +
+  labs(x=NULL,
+       fill="AS type",
+       y="disorder rate") +
+  facet_wrap(~WithDom.WithEnrDom, 
+             labeller=labeller(WithDom.WithEnrDom=c("no.no"="No overlap",
+                                                    "yes.no"="With overlap",
+                                                    "yes.yes"="With enriched domain"))) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, 
+                                   color="black", size=8),
+        axis.text.y = element_text(color="black", size=8))
+  
+
+# Print and save
+fig16
+#ggsave(paste0(params$sumdir,"/plots/Fig16.pdf"),width=6,height=2.5)
+
+```
+
+
+
+
+Simplified version of figure 16. Distribution of the disorder rate of exons with ("yes") or without ("no") at least one overlapping domain. 
+
+```{r}
+# Boxplot: simplified Fig. 16
+fig16_simplified<- ggplot(DisDom.yn) +
+  aes(x = Detected, 
+      y = Dis, 
+      fill = Type) +
+  geom_boxplot(width=0.75, outlier.shape = 1, outlier.size=0.8) +
+  ylim(0,1)+
+  scale_fill_manual(values=col_exSets, 
+                    labels=real_exSets, 
+                    name= "AS type") +
+  labs(x = "detected domain", y = "disorder rate") +
+  theme_bw() +
+  theme(legend.position="right", legend.direction = "vertical",  
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, color="black"),
+        axis.text.y = element_text(color="black")) 
+  
+# Print and save  
+fig16_simplified
+#ggsave(paste0(params$sumdir,"/plots/Fig16_simplified.pdf"),width=4,height=2.5)
+
+```
+

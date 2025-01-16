@@ -1,0 +1,225 @@
+---
+title: "Disorder_Per_Species"
+output: html_document
+date: "2024-11-15"
+params:
+  datadir: "/users/mirimia/izapata/projects/DisorderRegions/Obtain_DisDom/data"
+  sumdir: "/users/mirimia/izapata/projects/DisorderRegions/data/Obtain_DisDom/Summary"
+  DisAEX: "DisExA_AllSp.tab.gz"
+  VastComp: "All-Disop_IupC_IupR_EX.tab.gz"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r libraries}
+knitr::opts_chunk$set(echo = TRUE)
+#Libraries
+require(ggplot2) # figures
+require("patchwork") # combine figures
+require(tidyr)  # data table manipulation
+require(dplyr)  # data table manipulation
+
+
+
+# Params
+# internal abbreviations of species
+ordered_species = c("Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi", "Bla", "Sp2", "Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi", "Sma", "Obi")
+
+# real abbreviations of species
+real_species = c("Hs2"="Hsa", "Mm2"="Mmu", "Bt2"="Bta", "Mdo"="Mdo", "Gga"="Gga", "Xtr"="Xtr", "Dre"="Dre", "Cmi"="Cmi", "Bla"="Bla", "Sp2"="Spu", "Dme"="Dme", "Eba"="Eba", "Aae"="Aae", "Bmo"="Bmo", "Tca"="Tca", "Ame"="Ame", "Bge"="Bge", "Cdi"="Cdi", "Sma"="Sma", "Obi"="Obi")
+
+# Specties in VastDB at present
+vastdb_species = c("Hs2", "Mm2", "Bt2","Gga","Dre","Dme")
+
+# Clades
+Deuterostoma = c("Hs2", "Mm2", "Bt2", "Mdo", "Gga", "Xtr", "Dre", "Cmi", "Bla", "Sp2")
+Protostoma = c("Dme", "Eba", "Aae", "Bmo", "Tca", "Ame", "Bge", "Cdi", "Sma", "Obi")
+
+# Aesthetics
+
+vastdv_colors=c("Hs2"="#00BFFF", "Mm2"="#159DFF", "Bt2"="#1873CD",
+                "Gga"="#3F3F8B", "Dre"="#82359D","Dme"="red")
+
+
+species_colors = c("Hs2"="#00BFFF", "Mm2"="#159DFF", "Bt2"="#1873CD", "Mdo"="#174B8B", "Gga"="#3F3F8B", "Xtr"="#64398B","Dre"="#82359D", "Cmi"="#9932CC", "Bla"="#2E8B57", "Sp2"="#96B12B", rev(c("Obi"="#FFFF00","Sma"="#FFCC33", "Cdi"="goldenrod", "Bge"="burlywood2", "Ame"="#FF9966", "Tca"="#FF6600","Bmo"="#CC6600", "Aae"="#993300", "Eba"="firebrick3", "Dme"="red")))
+
+clade_colors = c("Vertebrata"= "mediumorchid", "Deuterostoma"="olivedrab3", 
+                 "Insecta"="tan3", "Protostoma"="yellow", "Bilateria"="firebrick1", 
+                 "Outgroups"="dimgray")
+```
+
+
+# Fig.3A
+
+## Load data
+Table with information on the disorder rate of the main exons (A) computed with:
+- Disopred (and cutoff): "A_dDc", previously computed in the lab for VastDB
+- Iupred2a (and cutoff): "A_dIc"
+- Iupred2a (directly on raw values, not applying binarization step): "A_dIr"
+
+Information of all AS exon skipping (EX) events (column "Event") from the 6 species (column "Species") currently present at VastDB that are also included in my analyses.
+
+
+```{r Plots_build, fig.height=8}
+# Load data
+CompDisIup<-read.table(paste0(params$sumdir,"/",params$VastComp), 
+                  stringsAsFactors = T, header=T, na.strings="na", sep = "\t",
+                  quote = "",comment.char = "", fill = TRUE)
+# Asign column names
+colnames(CompDisIup)<-c("Species", "Event", "A_dDc","A_dIc","A_dIr")
+
+# Data preparation
+CompDisIup = CompDisIup %>%
+  mutate(Species = factor(Species, levels=ordered_species))
+```
+
+
+## Plot
+Figure 3A, density lines of the EX distribution rates for all species
+
+
+Data formating: combine the 3 columns with information on the disorder rate into one, adding a column identifying with method corresponds with each value.
+
+```{r}
+# Still an improvement: using facet wrap
+Comp2<- CompDisIup %>%
+  rename(Disopred_cutoff = A_dDc,
+         Iupred_cutoff = A_dIc,
+         Iupred_raw = A_dIr) %>%
+    pivot_longer(
+    cols = c(Disopred_cutoff,Iupred_cutoff, Iupred_raw), 
+    names_to = "Method",      
+    values_to = "Disorder_Rate")
+```
+
+
+```{r}
+# Plot
+distributions<-ggplot(Comp2, aes(x = Disorder_Rate, color = Species, linetype = Species)) +
+  geom_density(fill = NA) + 
+  scale_color_manual(values = species_colors, labels=real_species) + 
+  scale_linetype_manual(values=c("solid", "dashed", "dotted", "dotdash", "longdash", "twodash"),
+                        labels=real_species) +
+  labs(x ="disorder rate") +
+  facet_wrap(~ Method) +
+  theme_bw() +
+  theme(legend.position = "none") 
+
+# Print and save
+distributions
+##ggsave(paste0(params$sumdir,"/plots/Fig3a.pdf"),width=7,height=3)
+```
+
+# Fig3B
+
+Pair-comparison of disorder scores computed with different methods (as density plot)
+
+
+
+```{r}
+#  Function to create denstity pots
+graphXcomp2<-function(df, xname, yname){
+    # parameters for the density plot
+  binN<-30 # number of bins (density plot)
+  lim1<-3  # limits for the colors: min (saturation)
+  lim2<-5 # limits for the colors: min (saturation)
+  
+  # Methods to compare: transform name of the method to abbreviation (variable)
+  ifelse(xname=="Iupred-cutoff",xcol<-df[,"A_dIc"],
+         ifelse(xname=="Iupred-raw",xcol<-df[,"A_dIr"],
+                ifelse(xname=="Disopred",xcol<-df[,"A_dDc"],"ERROR")))
+  
+  ifelse(yname=="Iupred-cutoff",ycol<-df[,"A_dIc"],
+         ifelse(yname=="Iupred-raw",ycol<-df[,"A_dIr"],
+                ifelse(yname=="Disopred",ycol<-df[,"A_dDc"],"ERROR")))
+  
+
+  # Graphs
+  dens.plot <- ggplot(df, aes(x=xcol, y=ycol) ) +
+    geom_hex(aes(fill= stat(log(count))), bins=binN) +
+    geom_smooth(linewidth=0.75, linetype = 1, aes(col=Species)) +
+    scale_color_manual(values=species_colors, labels=real_species) +
+    scale_fill_viridis_c(limits=c(lim1,lim2), oob = scales::squish) + 
+    labs(x=xname,y=yname) +
+    # add tendency line
+    geom_abline(intercept = 0, slope = 1, color="white",linetype=2,linewidth=0.5) +
+    # one plot per species
+    facet_wrap(~ Species, ncol=6, labeller = labeller(Species=real_species)) +
+    theme_bw() +
+    theme(legend.position = "none")
+  
+  return(dens.plot)
+}
+
+# Generate one plot for each pair-comparison (with all species per plot)  
+all_Ir.Ic<-graphXcomp2(CompDisIup, xname="Iupred-raw",yname="Iupred-cutoff")
+all_Ic.Dc<-graphXcomp2(CompDisIup, xname="Iupred-cutoff",yname="Disopred")
+all_Ir.Dc<-graphXcomp2(CompDisIup, xname="Iupred-raw",yname="Disopred")
+
+# Combine density lines (Fig. 3A) 
+# with the 3 density plots of the pair-comparisons (Fig. 3B-D)
+fig_all<- (distributions | all_Ic.Dc | all_Ir.Dc | all_Ir.Ic  ) +
+  patchwork::plot_layout(nrow=4, guides="collect") & 
+   patchwork::plot_annotation(tag_levels = "A") &
+  theme(legend.position = "bottom", legend.direction = "horizontal",
+        axis.text.x = element_text(angle = 0, hjust = 0.5, 
+                                   vjust = 1, color="black",
+                                   size=rel(0.85)),
+        axis.text.y= element_text(color="black"))
+
+# Print and save
+fig_all
+#ggsave(paste0(params$sumdir,"/plots/Fig3_ABCD.pdf"),width=10,height=9)
+
+```
+
+# Figure 4
+
+Distribution (violin plot) of the disorder rates of all EX AS events for the 20 species, colored by clade. Computed with Iupred2a without cuttof (no probability binarization step): Iupred2a-raw).
+
+
+## Load table 
+Load table with information of the disorder rate for all 20 species.
+
+```{r TypeEventSp}
+# Load table
+AdisT<-read.table(paste0(params$sumdir,"/",params$DisAEX), 
+                  stringsAsFactors = T, header=F, na.strings="na", sep = "\t",
+                  quote = "",comment.char = "", fill = TRUE)
+
+# Asign column name
+colnames(AdisT)<-c("Species","Gene","Event","A_Disr")
+
+# Data preparation: species as ordered factors, add clade
+AdisT = AdisT %>%
+  mutate(Species = factor(Species, levels=ordered_species)) %>%
+  mutate(Clade = ifelse(Species %in% Deuterostoma, "Deuterostoma", "Protostoma")) %>%
+  mutate(Clade = factor(Clade, levels=c("Deuterostoma", "Protostoma")))
+```
+
+# Violin plot
+
+```{r PlotFig4}
+# Colored by clade
+fig4<-ggplot(AdisT, aes(x=Species,y=A_Disr,fill=Clade, alpha=0.5)) + 
+  geom_violin(trim=T) +
+  geom_boxplot(width=0.25, show.legend = FALSE) +
+  scale_fill_manual(values=clade_colors) +
+  labs(x ="Species", y = "disorder score")+
+  theme_bw() +
+  theme(legend.position="right", legend.direction = "vertical",  
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1, color="black"),
+        axis.text.y = element_text(color="black")) +
+  scale_x_discrete(labels=real_species) 
+
+# Print and save
+fig4 + guides(alpha=F)
+
+#ggsave(paste0(params$sumdir,"/plots/Fig4.pdf"),width=8,height=3)
+
+```
+
+
